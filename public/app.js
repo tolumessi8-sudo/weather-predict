@@ -191,6 +191,17 @@ document.querySelectorAll(".choice").forEach((btn) => {
   });
 });
 
+// ---- Change city ----
+$("#change-city-btn").addEventListener("click", () => {
+  localStorage.removeItem("rc_city");
+  city = null;
+  $("#predict-card").classList.add("hidden");
+  $("#leaderboard-card").classList.add("hidden");
+  $("#name-card").classList.add("hidden");
+  $("#city-card").classList.remove("hidden");
+  toast("Pick a new city or use your location");
+});
+
 // ---- Username ----
 $("#username-save").addEventListener("click", async () => {
   const name = $("#username-input").value.trim().slice(0, 20);
