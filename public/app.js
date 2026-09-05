@@ -37,8 +37,17 @@ function hourInTz(tz) {
   return parseInt(fmt.format(now), 10);
 }
 
+// ---- Bot detection (basic) ----
+function looksLikeBot() {
+  if (navigator.webdriver) return true;
+  if (!navigator.language) return true;
+  if (/HeadlessChrome|bot|crawl|spider|slurp/i.test(navigator.userAgent)) return true;
+  return false;
+}
+
 // ---- Profile ----
 async function ensureProfile() {
+  if (looksLikeBot()) return; // skip profile creation for obvious bots/crawlers
   let { data, error } = await sb.from("profiles").select("*").eq("device_id", deviceId).maybeSingle();
   if (error) console.error(error);
   if (!data) {
@@ -75,6 +84,7 @@ async function geocodeCity(name) {
 async function setCity(cityObj) {
   city = cityObj;
   localStorage.setItem("rc_city", JSON.stringify(city));
+  if (!profile) await ensureProfile();
   $("#city-card").classList.add("hidden");
   $("#predict-card").classList.remove("hidden");
   $("#leaderboard-card").classList.remove("hidden");
@@ -82,6 +92,7 @@ async function setCity(cityObj) {
   $("#city-label").textContent = city.name;
   await refreshForecastHint();
   await refreshTodayState();
+  await resolvePastPredictions();
 }
 
 $("#city-submit").addEventListener("click", async () => {
@@ -283,8 +294,10 @@ async function loadLeaderboard() {
 
 // ---- Init ----
 (async function init() {
-  await ensureProfile();
+  // Only create/load a profile once we know the person has a city set (real engagement),
+  // not on every bare page load — keeps out crawlers and drive-by visits.
   if (city) {
+    await ensureProfile();
     $("#city-card").classList.add("hidden");
     $("#predict-card").classList.remove("hidden");
     $("#leaderboard-card").classList.remove("hidden");
