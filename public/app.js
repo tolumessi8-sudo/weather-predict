@@ -93,13 +93,28 @@ $("#city-submit").addEventListener("click", async () => {
   await setCity(result);
 });
 
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const json = await res.json();
+    const city = json.city || json.locality || json.principalSubdivision;
+    const country = json.countryName;
+    if (city && country) return `${city}, ${country}`;
+    if (city) return city;
+    return "Your Location";
+  } catch (e) {
+    return "Your Location";
+  }
+}
+
 $("#loc-btn").addEventListener("click", () => {
   if (!navigator.geolocation) { toast("Geolocation not supported"); return; }
   toast("Getting your location…");
   navigator.geolocation.getCurrentPosition(async (pos) => {
     const lat = pos.coords.latitude, lon = pos.coords.longitude;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    await setCity({ name: "Your Location", lat, lon, timezone: tz });
+    const name = await reverseGeocode(lat, lon);
+    await setCity({ name, lat, lon, timezone: tz });
   }, () => toast("Location permission denied"));
 });
 
