@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://yontcnqyosjcjhxjzzdq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_-kwUgVg_19Q42OIfdWi-6g_UMpaOs_d";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const RAIN_THRESHOLD_MM = 0.2;
+const RAIN_THRESHOLD_MM = 1.0; // total mm across the day before we call it "rain" — filters out trace/drizzle noise in the forecast model
 const CUTOFF_HOUR = 15; // 3pm
 
 const $ = (sel) => document.querySelector(sel);
