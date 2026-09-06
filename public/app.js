@@ -3,18 +3,8 @@ const SUPABASE_URL = "https://yontcnqyosjcjhxjzzdq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_-kwUgVg_19Q42OIfdWi-6g_UMpaOs_d";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const RAIN_THRESHOLD_MM = 0.2; // precipitation above this counts as "rain"
+const RAIN_THRESHOLD_MM = 0.2;
 const CUTOFF_HOUR = 15; // 3pm
-
-// ---- Local state ----
-let deviceId = localStorage.getItem("rc_device_id");
-if (!deviceId) {
-  deviceId = crypto.randomUUID();
-  localStorage.setItem("rc_device_id", deviceId);
-}
-
-let city = JSON.parse(localStorage.getItem("rc_city") || "null"); // {name, lat, lon, timezone}
-let profile = null;
 
 const $ = (sel) => document.querySelector(sel);
 const toast = (msg, ms = 2500) => {
@@ -24,43 +14,120 @@ const toast = (msg, ms = 2500) => {
   setTimeout(() => t.classList.remove("show"), ms);
 };
 
+let city = JSON.parse(localStorage.getItem("rc_city") || "null");
+let session = null;
+let profile = null;
+
 function todayStrInTz(tz) {
-  // Returns YYYY-MM-DD for "now" in the given IANA timezone
   const now = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-  return fmt.format(now); // en-CA gives YYYY-MM-DD
+  return fmt.format(now);
 }
 
-function hourInTz(tz) {
-  const now = new Date();
-  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false });
-  return parseInt(fmt.format(now), 10);
+// ---- Avatar helpers ----
+function initialsFor(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-// ---- Bot detection (basic) ----
-function looksLikeBot() {
-  if (navigator.webdriver) return true;
-  if (!navigator.language) return true;
-  if (/HeadlessChrome|bot|crawl|spider|slurp/i.test(navigator.userAgent)) return true;
-  return false;
+function colorFor(seed) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 45%)`;
 }
 
-// ---- Profile ----
-async function ensureProfile() {
-  if (looksLikeBot()) return; // skip profile creation for obvious bots/crawlers
-  let { data, error } = await sb.from("profiles").select("*").eq("device_id", deviceId).maybeSingle();
-  if (error) console.error(error);
-  if (!data) {
-    const { data: created, error: insErr } = await sb
-      .from("profiles")
-      .insert({ device_id: deviceId })
-      .select()
-      .single();
-    if (insErr) console.error(insErr);
-    data = created;
+function renderAvatarButton(name, avatarUrl) {
+  const btn = $("#avatar-btn");
+  if (avatarUrl) {
+    btn.innerHTML = `<img src="${avatarUrl}" alt="${name}" referrerpolicy="no-referrer" />`;
+    btn.style.background = "transparent";
+  } else {
+    btn.textContent = initialsFor(name);
+    btn.style.background = colorFor(name || "?");
   }
+  $("#avatar-wrap").classList.remove("hidden");
+  $("#avatar-menu-name").textContent = name;
+}
+
+function smallAvatarHtml(name, avatarUrl) {
+  if (avatarUrl) {
+    return `<img src="${avatarUrl}" alt="" referrerpolicy="no-referrer" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;" />`;
+  }
+  const initials = initialsFor(name);
+  const bg = colorFor(name || "?");
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${bg};color:#fff;font-size:0.65rem;font-weight:800;vertical-align:middle;margin-right:8px;">${initials}</span>`;
+}
+
+// ---- Auth ----
+$("#google-btn").addEventListener("click", async () => {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin },
+  });
+  if (error) toast("Google sign-in isn't set up yet — try email instead");
+});
+
+$("#email-btn").addEventListener("click", async () => {
+  const email = $("#email-input").value.trim();
+  if (!email) return;
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) {
+    $("#auth-status").textContent = "Something went wrong — try again.";
+  } else {
+    $("#auth-status").textContent = `Check ${email} for a sign-in link.`;
+  }
+});
+
+$("#avatar-btn").addEventListener("click", () => {
+  $("#avatar-menu").classList.toggle("hidden");
+});
+
+$("#signout-btn").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  window.location.reload();
+});
+
+async function ensureProfile() {
+  const user = session.user;
+  let { data, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  if (error) console.error(error);
+
+  if (!data) {
+    // First time this account has ever signed in — ask what to call them.
+    const suggested =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      (user.email ? user.email.split("@")[0] : "Player");
+    $("#namepicker-input").value = suggested;
+    $("#namepicker-card").classList.remove("hidden");
+    $("#namepicker-save").onclick = async () => {
+      const chosen = $("#namepicker-input").value.trim().slice(0, 20) || suggested;
+      const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+      const { data: created, error: insErr } = await sb
+        .from("profiles")
+        .insert({ id: user.id, display_name: chosen, avatar_url: avatarUrl })
+        .select()
+        .single();
+      if (insErr) { console.error(insErr); toast("Could not save profile"); return; }
+      profile = created;
+      $("#namepicker-card").classList.add("hidden");
+      renderAvatarButton(profile.display_name, profile.avatar_url);
+      renderStats();
+      afterAuthReady();
+    };
+    return; // wait for name picker submission
+  }
+
   profile = data;
+  renderAvatarButton(profile.display_name, profile.avatar_url);
   renderStats();
+  afterAuthReady();
 }
 
 function renderStats() {
@@ -69,7 +136,17 @@ function renderStats() {
   $("#stat-best").textContent = profile.best_streak;
   const acc = profile.total_predictions > 0 ? Math.round((profile.total_correct / profile.total_predictions) * 100) : 0;
   $("#stat-acc").textContent = acc + "%";
-  $("#username-input").value = profile.username || "";
+}
+
+// Runs once we have both a session and a profile row.
+async function afterAuthReady() {
+  $("#auth-card").classList.add("hidden");
+  if (city) {
+    await enterCityMode();
+  } else {
+    $("#city-card").classList.remove("hidden");
+  }
+  await loadLeaderboard();
 }
 
 // ---- City setup ----
@@ -80,29 +157,6 @@ async function geocodeCity(name) {
   const r = json.results[0];
   return { name: `${r.name}${r.admin1 ? ", " + r.admin1 : ""}${r.country ? ", " + r.country : ""}`, lat: r.latitude, lon: r.longitude, timezone: r.timezone };
 }
-
-async function setCity(cityObj) {
-  city = cityObj;
-  localStorage.setItem("rc_city", JSON.stringify(city));
-  if (!profile) await ensureProfile();
-  $("#city-card").classList.add("hidden");
-  $("#predict-card").classList.remove("hidden");
-  $("#leaderboard-card").classList.remove("hidden");
-  $("#name-card").classList.remove("hidden");
-  $("#city-label").textContent = city.name;
-  await refreshForecastHint();
-  await refreshTodayState();
-  await resolvePastPredictions();
-}
-
-$("#city-submit").addEventListener("click", async () => {
-  const val = $("#city-input").value.trim();
-  if (!val) return;
-  toast("Looking up city…");
-  const result = await geocodeCity(val);
-  if (!result) { toast("City not found, try again"); return; }
-  await setCity(result);
-});
 
 async function reverseGeocode(lat, lon) {
   try {
@@ -118,6 +172,31 @@ async function reverseGeocode(lat, lon) {
   }
 }
 
+async function enterCityMode() {
+  $("#city-card").classList.add("hidden");
+  $("#predict-card").classList.remove("hidden");
+  $("#leaderboard-card").classList.remove("hidden");
+  $("#city-label").textContent = city.name;
+  await refreshForecastHint();
+  await refreshTodayState();
+  await resolvePastPredictions();
+}
+
+async function setCity(cityObj) {
+  city = cityObj;
+  localStorage.setItem("rc_city", JSON.stringify(city));
+  await enterCityMode();
+}
+
+$("#city-submit").addEventListener("click", async () => {
+  const val = $("#city-input").value.trim();
+  if (!val) return;
+  toast("Looking up city…");
+  const result = await geocodeCity(val);
+  if (!result) { toast("City not found, try again"); return; }
+  await setCity(result);
+});
+
 $("#loc-btn").addEventListener("click", () => {
   if (!navigator.geolocation) { toast("Geolocation not supported"); return; }
   toast("Getting your location…");
@@ -129,7 +208,16 @@ $("#loc-btn").addEventListener("click", () => {
   }, () => toast("Location permission denied"));
 });
 
-// ---- Forecast hint (today, before prediction) ----
+$("#change-city-btn").addEventListener("click", () => {
+  localStorage.removeItem("rc_city");
+  city = null;
+  $("#predict-card").classList.add("hidden");
+  $("#leaderboard-card").classList.add("hidden");
+  $("#city-card").classList.remove("hidden");
+  toast("Pick a new city or use your location");
+});
+
+// ---- Forecast hint ----
 async function refreshForecastHint() {
   if (!city) return;
   try {
@@ -149,7 +237,7 @@ async function refreshForecastHint() {
   }
 }
 
-// ---- Today's prediction state ----
+// ---- Today's prediction ----
 async function refreshTodayState() {
   const today = todayStrInTz(city.timezone);
   const { data } = await sb
@@ -202,29 +290,7 @@ document.querySelectorAll(".choice").forEach((btn) => {
   });
 });
 
-// ---- Change city ----
-$("#change-city-btn").addEventListener("click", () => {
-  localStorage.removeItem("rc_city");
-  city = null;
-  $("#predict-card").classList.add("hidden");
-  $("#leaderboard-card").classList.add("hidden");
-  $("#name-card").classList.add("hidden");
-  $("#city-card").classList.remove("hidden");
-  toast("Pick a new city or use your location");
-});
-
-// ---- Username ----
-$("#username-save").addEventListener("click", async () => {
-  const name = $("#username-input").value.trim().slice(0, 20);
-  const { error } = await sb.from("profiles").update({ username: name || null }).eq("id", profile.id);
-  if (!error) {
-    profile.username = name;
-    toast("Name saved");
-    loadLeaderboard();
-  }
-});
-
-// ---- Resolve past unresolved predictions for this profile ----
+// ---- Resolve past predictions ----
 async function resolvePastPredictions() {
   const today = todayStrInTz(city ? city.timezone : "UTC");
   const { data: unresolved } = await sb
@@ -244,7 +310,6 @@ async function resolvePastPredictions() {
       const json = await res.json();
       const hours = json.hourly.time;
       const precs = json.hourly.precipitation;
-      // sum precipitation from midnight to 3pm
       let total = 0;
       for (let i = 0; i < hours.length; i++) {
         const h = new Date(hours[i]).getHours();
@@ -287,25 +352,21 @@ async function loadLeaderboard() {
   data.forEach((row, i) => {
     const div = document.createElement("div");
     div.className = "lb-row";
-    div.innerHTML = `<span><span class="lb-rank">${i + 1}.</span>${row.username}</span><span>🔥 ${row.current_streak} (best ${row.best_streak})</span>`;
+    div.innerHTML = `<span>${i + 1}. ${smallAvatarHtml(row.display_name, row.avatar_url)}${row.display_name}</span><span>🔥 ${row.current_streak} (best ${row.best_streak})</span>`;
     list.appendChild(div);
   });
 }
 
-// ---- Init ----
+// ---- Init: wire up auth state ----
+sb.auth.onAuthStateChange((_event, newSession) => {
+  session = newSession;
+});
+
 (async function init() {
-  // Only create/load a profile once we know the person has a city set (real engagement),
-  // not on every bare page load — keeps out crawlers and drive-by visits.
-  if (city) {
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  if (session) {
     await ensureProfile();
-    $("#city-card").classList.add("hidden");
-    $("#predict-card").classList.remove("hidden");
-    $("#leaderboard-card").classList.remove("hidden");
-    $("#name-card").classList.remove("hidden");
-    $("#city-label").textContent = city.name;
-    await refreshForecastHint();
-    await refreshTodayState();
-    await resolvePastPredictions();
   }
-  await loadLeaderboard();
+  // else: auth-card (shown by default) stays visible until they sign in
 })();
