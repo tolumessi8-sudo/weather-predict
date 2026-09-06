@@ -149,6 +149,47 @@ async function afterAuthReady() {
   await loadLeaderboard();
 }
 
+// ---- Countdown to 3pm ----
+let countdownInterval = null;
+
+function secondsSinceMidnightInTz(tz) {
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+  const parts = fmt.formatToParts(now);
+  const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
+  let h = get("hour");
+  if (h === 24) h = 0;
+  return h * 3600 + get("minute") * 60 + get("second");
+}
+
+function startCountdown() {
+  if (countdownInterval) clearInterval(countdownInterval);
+  const cutoffSeconds = CUTOFF_HOUR * 3600;
+
+  function tick() {
+    const elapsed = secondsSinceMidnightInTz(city.timezone);
+    const remaining = cutoffSeconds - elapsed;
+    const wrap = $("#countdown-wrap");
+
+    if (remaining <= 0) {
+      wrap.classList.add("hidden");
+      clearInterval(countdownInterval);
+      return;
+    }
+    wrap.classList.remove("hidden");
+    const h = Math.floor(remaining / 3600);
+    const m = Math.floor((remaining % 3600) / 60);
+    const s = remaining % 60;
+    $("#countdown-time").textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    const pctElapsed = ((cutoffSeconds - remaining) / cutoffSeconds) * 100;
+    $("#countdown-bar-fill").style.width = `${Math.min(100, pctElapsed)}%`;
+  }
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
 // ---- City setup ----
 async function geocodeCity(name) {
   const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`);
@@ -179,7 +220,9 @@ async function enterCityMode() {
   $("#city-label").textContent = city.name;
   await refreshForecastHint();
   await refreshTodayState();
+  await resolveTodayIfPastCutoff();
   await resolvePastPredictions();
+  startCountdown();
 }
 
 async function setCity(cityObj) {
@@ -250,16 +293,23 @@ async function refreshTodayState() {
 
   const choiceRow = $("#choice-row");
   const lockedMsg = $("#locked-msg");
+  const countdownWrap = $("#countdown-wrap");
 
   if (data) {
     choiceRow.classList.add("hidden");
     lockedMsg.classList.remove("hidden");
+    lockedMsg.classList.remove("result-good", "result-bad", "reveal-pop");
     if (data.resolved) {
-      lockedMsg.textContent = data.correct
-        ? `✅ You called it! It ${data.actual_value === "yes" ? "did" : "did not"} rain.`
-        : `❌ Missed it. It ${data.actual_value === "yes" ? "did" : "did not"} rain — you said ${data.predicted_value}.`;
+      countdownWrap.classList.add("hidden");
+      if (data.correct) {
+        lockedMsg.textContent = `✅ You called it! It ${data.actual_value === "yes" ? "did" : "did not"} rain.`;
+        lockedMsg.classList.add("result-good", "reveal-pop");
+      } else {
+        lockedMsg.textContent = `❌ Missed it. It ${data.actual_value === "yes" ? "did" : "did not"} rain — you said ${data.predicted_value}.`;
+        lockedMsg.classList.add("result-bad");
+      }
     } else {
-      lockedMsg.textContent = `You predicted "${data.predicted_value}". Check back after 3pm for the result!`;
+      lockedMsg.textContent = `You predicted "${data.predicted_value}". Hang tight for the reveal!`;
     }
   } else {
     choiceRow.classList.remove("hidden");
@@ -289,6 +339,65 @@ document.querySelectorAll(".choice").forEach((btn) => {
     await refreshTodayState();
   });
 });
+
+// ---- Resolve TODAY's prediction the moment 3pm passes (same-day, not tomorrow) ----
+async function resolveTodayIfPastCutoff() {
+  const elapsed = secondsSinceMidnightInTz(city.timezone);
+  if (elapsed < CUTOFF_HOUR * 3600) return; // not 3pm yet
+
+  const today = todayStrInTz(city.timezone);
+  const { data: pred } = await sb
+    .from("predictions")
+    .select("*")
+    .eq("profile_id", profile.id)
+    .eq("prediction_date", today)
+    .eq("question_type", "rain_by_3pm")
+    .eq("resolved", false)
+    .maybeSingle();
+
+  if (!pred) return;
+
+  try {
+    // Today's data isn't in the archive yet — use the forecast endpoint, which
+    // also carries already-elapsed hours of the current day.
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${pred.lat}&longitude=${pred.lon}&hourly=precipitation&timezone=${encodeURIComponent(city.timezone)}&forecast_days=1`
+    );
+    const json = await res.json();
+    const hours = json.hourly.time;
+    const precs = json.hourly.precipitation;
+    let total = 0;
+    for (let i = 0; i < hours.length; i++) {
+      const h = new Date(hours[i]).getHours();
+      if (h <= CUTOFF_HOUR) total += precs[i] || 0;
+    }
+    const actual = total >= RAIN_THRESHOLD_MM ? "yes" : "no";
+    const correct = actual === pred.predicted_value;
+
+    await sb.from("predictions").update({ actual_value: actual, correct, resolved: true }).eq("id", pred.id);
+
+    const newStreak = correct ? profile.current_streak + 1 : 0;
+    const newBest = Math.max(profile.best_streak, newStreak);
+    const newTotal = profile.total_predictions + 1;
+    const newCorrect = profile.total_correct + (correct ? 1 : 0);
+
+    await sb.from("profiles").update({
+      current_streak: newStreak,
+      best_streak: newBest,
+      total_predictions: newTotal,
+      total_correct: newCorrect,
+    }).eq("id", profile.id);
+
+    profile.current_streak = newStreak;
+    profile.best_streak = newBest;
+    profile.total_predictions = newTotal;
+    profile.total_correct = newCorrect;
+    renderStats();
+    await refreshTodayState();
+  } catch (e) {
+    console.error("Same-day resolution failed", e);
+  }
+}
 
 // ---- Resolve past predictions ----
 async function resolvePastPredictions() {
@@ -352,7 +461,13 @@ async function loadLeaderboard() {
   data.forEach((row, i) => {
     const div = document.createElement("div");
     div.className = "lb-row";
-    div.innerHTML = `<span>${i + 1}. ${smallAvatarHtml(row.display_name, row.avatar_url)}${row.display_name}</span><span>🔥 ${row.current_streak} (best ${row.best_streak})</span>`;
+    div.innerHTML = `
+      <span class="lb-left">
+        <span class="lb-rank">${i + 1}</span>
+        ${smallAvatarHtml(row.display_name, row.avatar_url)}
+        <span>${row.display_name}</span>
+      </span>
+      <span class="lb-streak">🔥 ${row.current_streak} <span style="color:var(--text-dim); font-weight:400;">(best ${row.best_streak})</span></span>`;
     list.appendChild(div);
   });
 }

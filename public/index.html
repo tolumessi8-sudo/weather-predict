@@ -6,78 +6,86 @@
 <title>WeatherWise — Daily Weather Predictions</title>
 <meta name="description" content="Predict tomorrow's weather. Build your streak. Beat the forecast." />
 <link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#1b2a4a" />
+<meta name="theme-color" content="#101B2D" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg-1:#0f1c33;
-    --bg-2:#1b2a4a;
-    --card:#22335a;
-    --accent:#ffb648;
-    --accent-2:#4fd1ff;
-    --text:#eef2ff;
-    --text-dim:#a9b6d9;
-    --good:#5fe3a1;
-    --bad:#ff6b6b;
-    --radius:18px;
+    --bg:#101B2D;
+    --bg-deep:#0B1524;
+    --surface:#182946;
+    --surface-2:#1E3153;
+    --line:rgba(255,255,255,0.08);
+    --sun:#FFB238;
+    --rain:#38BEC9;
+    --good:#4ADE80;
+    --bad:#FB7185;
+    --text:#F3F6FB;
+    --text-dim:#8C9BB5;
   }
   *{box-sizing:border-box;}
+  html,body{ height:100%; }
   body{
     margin:0;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-    background:linear-gradient(160deg,var(--bg-1),var(--bg-2) 60%);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--bg);
     color:var(--text);
     min-height:100vh;
     padding-bottom:40px;
   }
-  header{
-    padding:20px 20px 10px;
+  h1, .num, .btn-city, .btn-loc, .choice, .question{
+    font-family:'Space Grotesk','Inter',sans-serif;
   }
+
+  /* ---- Header ---- */
+  header{ padding:22px 20px 8px; }
   .header-top{
     display:grid;
     grid-template-columns:40px 1fr 40px;
     align-items:center;
   }
+  .header-top .brand{ text-align:center; }
   .header-top h1{
-    font-size:1.5rem;
-    margin:0 0 2px;
-    letter-spacing:-0.5px;
-    text-align:center;
-  }
-  .header-top p{
+    font-size:1.4rem;
+    font-weight:700;
     margin:0;
+    letter-spacing:-0.3px;
+  }
+  .header-top .tagline{
+    margin:2px 0 0;
     color:var(--text-dim);
-    font-size:0.85rem;
-    text-align:center;
+    font-size:0.8rem;
   }
   #avatar-wrap{ position:relative; justify-self:end; }
   .avatar-btn{
     width:38px; height:38px;
     border-radius:50%;
-    background:var(--accent-2);
-    color:#04223a;
-    font-weight:800;
-    font-size:0.9rem;
+    font-weight:700;
+    font-size:0.85rem;
     display:flex; align-items:center; justify-content:center;
     overflow:hidden;
     padding:0;
+    color:#04223a;
+    border:2px solid var(--line);
   }
   .avatar-btn img{ width:100%; height:100%; object-fit:cover; }
   .avatar-menu{
     position:absolute;
-    top:46px;
-    right:0;
-    background:var(--card);
+    top:46px; right:0;
+    background:var(--surface);
+    border:1px solid var(--line);
     border-radius:12px;
     padding:8px;
-    min-width:140px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.35);
+    min-width:150px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.45);
     z-index:10;
   }
   .avatar-menu-name{
     padding:8px 10px;
-    font-size:0.85rem;
+    font-size:0.82rem;
     color:var(--text-dim);
-    border-bottom:1px solid rgba(255,255,255,0.08);
+    border-bottom:1px solid var(--line);
     margin-bottom:4px;
     white-space:nowrap;
     overflow:hidden;
@@ -92,147 +100,235 @@
     border-radius:8px;
     font-size:0.85rem;
   }
-  .avatar-menu-item:hover{ background:#12203d; }
-  .container{
-    max-width:480px;
-    margin:0 auto;
-    padding:0 16px;
-  }
+  .avatar-menu-item:hover{ background:var(--surface-2); }
+
+  .container{ max-width:480px; margin:0 auto; padding:0 16px; }
+
+  /* ---- Generic surface card (auth, city, leaderboard) ---- */
   .card{
-    background:var(--card);
-    border-radius:var(--radius);
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:16px;
     padding:20px;
     margin-top:16px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.25);
-  }
-  .city-row{
-    display:flex;
-    gap:8px;
-  }
-  input[type="text"]{
-    flex:1;
-    padding:12px 14px;
-    border-radius:12px;
-    border:none;
-    background:#12203d;
-    color:var(--text);
-    font-size:1rem;
-  }
-  button{
-    font-family:inherit;
-    cursor:pointer;
-    border:none;
-  }
-  .btn-loc, .btn-city{
-    background:var(--accent-2);
-    color:#04223a;
-    font-weight:700;
-    padding:12px 14px;
-    border-radius:12px;
-    font-size:0.9rem;
-  }
-  .question{
-    font-size:1.15rem;
-    font-weight:600;
-    margin:4px 0 4px;
-  }
-  .question .city-name{ color:var(--accent-2); }
-  .subtext{
-    color:var(--text-dim);
-    font-size:0.85rem;
-    margin-bottom:16px;
-  }
-  .choice-row{
-    display:flex;
-    gap:12px;
-  }
-  .choice{
-    flex:1;
-    padding:18px 0;
-    border-radius:14px;
-    font-size:1.1rem;
-    font-weight:700;
-    background:#12203d;
-    color:var(--text);
-    transition:transform .1s ease;
-  }
-  .choice:active{ transform:scale(0.96); }
-  .choice.yes:hover{ background:#173a2c; }
-  .choice.no:hover{ background:#3a1717; }
-  .choice.selected.yes{ background:var(--good); color:#04220f;}
-  .choice.selected.no{ background:var(--bad); color:#2a0505;}
-  .locked-msg{
-    text-align:center;
-    padding:20px 0 4px;
-    color:var(--text-dim);
-    font-size:0.95rem;
-  }
-  .stats-row{
-    display:flex;
-    justify-content:space-between;
-    margin-top:16px;
-    gap:10px;
-  }
-  .stat{
-    flex:1;
-    background:#12203d;
-    border-radius:12px;
-    padding:12px 8px;
-    text-align:center;
-  }
-  .stat .num{
-    font-size:1.4rem;
-    font-weight:800;
-    color:var(--accent);
-  }
-  .stat .lbl{
-    font-size:0.7rem;
-    color:var(--text-dim);
-    text-transform:uppercase;
-    letter-spacing:0.5px;
   }
   .section-title{
-    font-size:1rem;
-    font-weight:700;
+    font-size:0.95rem;
+    font-weight:600;
     margin:0 0 10px;
     display:flex;
     align-items:center;
     gap:6px;
   }
-  .lb-row{
-    display:flex;
-    justify-content:space-between;
-    padding:8px 0;
-    border-bottom:1px solid rgba(255,255,255,0.06);
+  .subtext{ color:var(--text-dim); font-size:0.85rem; margin-bottom:16px; line-height:1.5; }
+
+  input[type="text"]{
+    flex:1;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--bg-deep);
+    color:var(--text);
+    font-size:1rem;
+    font-family:inherit;
+  }
+  button{ font-family:inherit; cursor:pointer; border:none; }
+  .city-row{ display:flex; gap:8px; }
+  .name-input{ margin-top:10px; display:flex; gap:8px; }
+
+  .btn-loc, .btn-city{
+    background:var(--rain);
+    color:#04223a;
+    font-weight:700;
+    padding:12px 14px;
+    border-radius:10px;
     font-size:0.9rem;
   }
-  .lb-row:last-child{ border-bottom:none; }
-  .lb-rank{ color:var(--text-dim); width:24px; display:inline-block; }
+
+  /* ---- Prediction ticket ---- */
+  .ticket{
+    position:relative;
+    margin-top:20px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:22px 20px 18px;
+    overflow:visible;
+  }
+  .ticket::before, .ticket::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    width:20px; height:20px;
+    background:var(--bg);
+    border-radius:50%;
+    transform:translateY(-50%);
+  }
+  .ticket::before{ left:-10px; }
+  .ticket::after{ right:-10px; }
+  .ticket-perforation{
+    border-top:2px dashed var(--line);
+    margin:18px 0;
+  }
+  .question{
+    font-size:1.2rem;
+    font-weight:700;
+    line-height:1.35;
+    margin:0 0 6px;
+  }
+  .question .city-name{ color:var(--rain); }
+  .forecast-hint{ color:var(--text-dim); font-size:0.82rem; margin-bottom:4px; }
+
+  .countdown{
+    margin-top:14px;
+    text-align:center;
+  }
+  .countdown-label{
+    font-size:0.7rem;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    margin-bottom:4px;
+  }
+  .countdown-time{
+    font-size:1.6rem;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:1px;
+  }
+  .countdown-bar{
+    margin-top:8px;
+    height:5px;
+    border-radius:3px;
+    background:var(--bg-deep);
+    overflow:hidden;
+  }
+  .countdown-bar-fill{
+    height:100%;
+    background:linear-gradient(90deg, var(--rain), var(--sun));
+    width:0%;
+    transition:width 1s linear;
+  }
+
+  .choice-row{ display:flex; gap:12px; margin-top:16px; }
+  .choice{
+    flex:1;
+    padding:20px 0;
+    border-radius:14px;
+    font-size:1.05rem;
+    font-weight:700;
+    color:#04223a;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  .choice:active{ transform:scale(0.95); }
+  .choice.yes{ background:var(--rain); }
+  .choice.no{ background:var(--sun); }
+  .choice:hover{ filter:brightness(1.08); }
+
+  .locked-msg{
+    text-align:center;
+    padding:14px 4px 2px;
+    color:var(--text-dim);
+    font-size:0.92rem;
+    line-height:1.5;
+  }
+  .locked-msg.result-good{ color:var(--good); font-weight:600; }
+  .locked-msg.result-bad{ color:var(--bad); font-weight:600; }
+
+  .reveal-pop{
+    animation:pop 0.5s ease;
+  }
+  @keyframes pop{
+    0%{ transform:scale(1); }
+    30%{ transform:scale(1.06); }
+    100%{ transform:scale(1); }
+  }
+
+  /* ---- Scoreboard stats strip ---- */
+  .scoreboard{
+    display:flex;
+    margin-top:18px;
+    border-top:1px solid var(--line);
+    padding-top:14px;
+  }
+  .scoreboard .stat{
+    flex:1;
+    text-align:center;
+    position:relative;
+  }
+  .scoreboard .stat:not(:last-child)::after{
+    content:"";
+    position:absolute;
+    right:0; top:10%;
+    height:80%;
+    width:1px;
+    background:var(--line);
+  }
+  .scoreboard .num{
+    font-size:1.5rem;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    color:var(--sun);
+  }
+  .scoreboard .num.accent-rain{ color:var(--rain); }
+  .scoreboard .lbl{
+    font-size:0.65rem;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    margin-top:2px;
+  }
+
+  .change-city-row{ text-align:center; margin-top:14px; }
+  .change-city-row button{
+    background:none;
+    color:var(--text-dim);
+    font-size:0.78rem;
+    text-decoration:underline;
+    padding:6px;
+    font-family:'Inter',sans-serif;
+  }
+
   .ad-slot{
-    background:#12203d;
-    border:1px dashed #3a4d78;
+    background:var(--surface);
+    border:1px dashed var(--line);
     border-radius:12px;
     padding:14px;
     text-align:center;
     color:var(--text-dim);
-    font-size:0.75rem;
+    font-size:0.72rem;
     margin-top:16px;
   }
-  .name-input{
-    margin-top:10px;
+
+  /* ---- Leaderboard ---- */
+  .lb-row{
     display:flex;
-    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+    padding:9px 0;
+    border-bottom:1px solid var(--line);
+    font-size:0.9rem;
   }
+  .lb-row:last-child{ border-bottom:none; }
+  .lb-left{ display:flex; align-items:center; gap:10px; }
+  .lb-rank{
+    color:var(--text-dim);
+    font-size:0.8rem;
+    width:16px;
+    font-variant-numeric:tabular-nums;
+  }
+  .lb-streak{ font-variant-numeric:tabular-nums; color:var(--sun); font-weight:600; }
+
   .toast{
     position:fixed;
-    bottom:20px;
-    left:50%;
+    bottom:20px; left:50%;
     transform:translateX(-50%);
-    background:var(--card);
+    background:var(--surface);
+    border:1px solid var(--line);
     padding:10px 18px;
     border-radius:30px;
     font-size:0.85rem;
-    box-shadow:0 6px 20px rgba(0,0,0,0.3);
+    box-shadow:0 6px 20px rgba(0,0,0,0.35);
     opacity:0;
     transition:opacity .3s ease;
     pointer-events:none;
@@ -241,13 +337,14 @@
   }
   .toast.show{ opacity:1; }
   .hidden{ display:none !important; }
-  a{ color:var(--accent-2); }
+  a{ color:var(--rain); }
   .footer-note{
     text-align:center;
     color:var(--text-dim);
-    font-size:0.7rem;
+    font-size:0.68rem;
     margin-top:24px;
     padding:0 20px;
+    line-height:1.6;
   }
 </style>
 </head>
@@ -256,9 +353,9 @@
 <header>
   <div class="header-top">
     <div></div>
-    <div>
+    <div class="brand">
       <h1>🌦️ WeatherWise</h1>
-      <p>Predict the weather. Build your streak.</p>
+      <p class="tagline">Predict the sky. Build your streak.</p>
     </div>
     <div id="avatar-wrap" class="hidden">
       <button id="avatar-btn" class="avatar-btn"></button>
@@ -276,16 +373,16 @@
   <div class="card" id="auth-card">
     <div class="section-title">👋 Welcome</div>
     <p class="subtext">Sign in to start predicting and track your streak.</p>
-    <button class="btn-loc" id="google-btn" style="width:100%; margin-bottom:12px;">Continue with Google</button>
+    <button class="btn-loc" id="google-btn" style="width:100%; margin-bottom:12px; background:var(--surface-2); color:var(--text); border:1px solid var(--line);">Continue with Google</button>
     <div class="subtext" style="text-align:center; margin:8px 0;">or</div>
     <div class="city-row">
       <input type="text" id="email-input" placeholder="you@example.com" />
       <button class="btn-city" id="email-btn">Send link</button>
     </div>
-    <div class="subtext" id="auth-status" style="margin-top:10px;"></div>
+    <div class="subtext" id="auth-status" style="margin-top:10px; margin-bottom:0;"></div>
   </div>
 
-  <!-- Name picker (shown once, right after first sign-in) -->
+  <!-- Name picker -->
   <div class="card hidden" id="namepicker-card">
     <div class="section-title">✏️ What should we call you?</div>
     <div class="name-input">
@@ -294,7 +391,7 @@
     </div>
   </div>
 
-  <!-- City setup card -->
+  <!-- City setup -->
   <div class="card hidden" id="city-card">
     <div class="section-title">📍 Set your city</div>
     <div class="city-row">
@@ -306,23 +403,34 @@
     </div>
   </div>
 
-  <!-- Main prediction card -->
-  <div class="card hidden" id="predict-card">
+  <!-- Prediction ticket -->
+  <div class="ticket hidden" id="predict-card">
     <div class="question">Will it rain in <span class="city-name" id="city-label"></span> by 3pm today?</div>
-    <div class="subtext" id="forecast-hint">Loading forecast hint…</div>
+    <div class="forecast-hint" id="forecast-hint">Loading forecast hint…</div>
+
     <div class="choice-row" id="choice-row">
       <button class="choice yes" data-val="yes">☔ Yes</button>
       <button class="choice no" data-val="no">☀️ No</button>
     </div>
+
+    <div class="countdown hidden" id="countdown-wrap">
+      <div class="countdown-label">Reveals in</div>
+      <div class="countdown-time" id="countdown-time">--:--:--</div>
+      <div class="countdown-bar"><div class="countdown-bar-fill" id="countdown-bar-fill"></div></div>
+    </div>
+
     <div class="locked-msg hidden" id="locked-msg"></div>
 
-    <div class="stats-row">
+    <div class="ticket-perforation"></div>
+
+    <div class="scoreboard">
       <div class="stat"><div class="num" id="stat-streak">0</div><div class="lbl">Streak</div></div>
       <div class="stat"><div class="num" id="stat-best">0</div><div class="lbl">Best</div></div>
-      <div class="stat"><div class="num" id="stat-acc">0%</div><div class="lbl">Accuracy</div></div>
+      <div class="stat"><div class="num accent-rain" id="stat-acc">0%</div><div class="lbl">Accuracy</div></div>
     </div>
-    <div style="text-align:center; margin-top:14px;">
-      <button id="change-city-btn" style="background:none; color:var(--text-dim); font-size:0.8rem; text-decoration:underline; padding:6px;">📍 Change city</button>
+
+    <div class="change-city-row">
+      <button id="change-city-btn">📍 Change city</button>
     </div>
   </div>
 
