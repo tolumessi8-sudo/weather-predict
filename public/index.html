@@ -3,446 +3,387 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-<title>WeatherWise — Daily Weather Predictions</title>
-<meta name="description" content="Predict tomorrow's weather. Build your streak. Beat the forecast." />
+<title>Daily Brain Battle — 5 Challenges. One Leaderboard.</title>
+<meta name="description" content="Every day, everyone gets the same 5 brain challenges. Compete on the global leaderboard, build your streak, come back tomorrow." />
+<meta property="og:title" content="Daily Brain Battle" />
+<meta property="og:description" content="5 challenges. 5 minutes. One leaderboard." />
 <link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#101B2D" />
+<meta name="theme-color" content="#0A0E1A" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#101B2D;
-    --bg-deep:#0B1524;
-    --surface:#182946;
-    --surface-2:#1E3153;
+    --bg:#0A0E1A;
+    --bg-elevated:#12172A;
+    --surface:#171D33;
+    --surface-2:#1F2740;
     --line:rgba(255,255,255,0.08);
-    --sun:#FFB238;
-    --rain:#38BEC9;
+    --primary:#7C5CFF;
+    --primary-2:#4FD1FF;
+    --gold:#FFC94D;
     --good:#4ADE80;
     --bad:#FB7185;
-    --text:#F3F6FB;
-    --text-dim:#8C9BB5;
+    --text:#F5F7FF;
+    --text-dim:#8B93B0;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{ height:100%; }
   body{
     margin:0;
     font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
     background:var(--bg);
+    background-image:radial-gradient(circle at 20% 0%, rgba(124,92,255,0.15), transparent 40%),
+                      radial-gradient(circle at 90% 10%, rgba(79,209,255,0.1), transparent 40%);
     color:var(--text);
     min-height:100vh;
-    padding-bottom:40px;
+    padding-bottom:50px;
   }
-  h1, .num, .btn-city, .btn-loc, .choice, .question{
-    font-family:'Space Grotesk','Inter',sans-serif;
-  }
+  h1,h2,h3, .num, .btn, .question-prompt{ font-family:'Space Grotesk','Inter',sans-serif; }
+  button{ font-family:inherit; cursor:pointer; border:none; }
+  a{ color:var(--primary-2); text-decoration:none; }
+  .hidden{ display:none !important; }
 
-  /* ---- Header ---- */
-  header{ padding:22px 20px 8px; }
-  .header-top{
-    display:grid;
-    grid-template-columns:40px 1fr 40px;
-    align-items:center;
+  /* ---- Nav ---- */
+  nav{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px;
+    max-width:640px; margin:0 auto;
   }
-  .header-top .brand{ text-align:center; }
-  .header-top h1{
-    font-size:1.4rem;
-    font-weight:700;
-    margin:0;
-    letter-spacing:-0.3px;
-  }
-  .header-top .tagline{
-    margin:2px 0 0;
-    color:var(--text-dim);
-    font-size:0.8rem;
-  }
-  #avatar-wrap{ position:relative; justify-self:end; }
-  .avatar-btn{
-    width:38px; height:38px;
-    border-radius:50%;
-    font-weight:700;
-    font-size:0.85rem;
+  .logo{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:1.1rem; }
+  .logo .mark{
+    width:32px; height:32px; border-radius:9px;
+    background:linear-gradient(135deg, var(--primary), var(--primary-2));
     display:flex; align-items:center; justify-content:center;
-    overflow:hidden;
-    padding:0;
-    color:#04223a;
+    font-size:0.85rem; font-weight:800; color:#0A0E1A;
+  }
+  #avatar-wrap{ position:relative; }
+  .avatar-btn{
+    width:36px; height:36px; border-radius:50%;
+    font-weight:700; font-size:0.8rem;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; padding:0; color:#0A0E1A;
     border:2px solid var(--line);
   }
   .avatar-btn img{ width:100%; height:100%; object-fit:cover; }
   .avatar-menu{
-    position:absolute;
-    top:46px; right:0;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:12px;
-    padding:8px;
-    min-width:150px;
-    box-shadow:0 12px 30px rgba(0,0,0,0.45);
-    z-index:10;
+    position:absolute; top:44px; right:0;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:12px; padding:8px; min-width:170px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.5); z-index:20;
   }
   .avatar-menu-name{
-    padding:8px 10px;
-    font-size:0.82rem;
-    color:var(--text-dim);
-    border-bottom:1px solid var(--line);
-    margin-bottom:4px;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
+    padding:8px 10px; font-size:0.82rem; color:var(--text-dim);
+    border-bottom:1px solid var(--line); margin-bottom:4px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .avatar-menu-item{
-    width:100%;
-    text-align:left;
-    background:none;
-    color:var(--text);
-    padding:8px 10px;
-    border-radius:8px;
-    font-size:0.85rem;
+    width:100%; text-align:left; background:none; color:var(--text);
+    padding:8px 10px; border-radius:8px; font-size:0.85rem;
   }
   .avatar-menu-item:hover{ background:var(--surface-2); }
 
-  .container{ max-width:480px; margin:0 auto; padding:0 16px; }
+  .container{ max-width:640px; margin:0 auto; padding:0 20px; }
 
-  /* ---- Generic surface card (auth, city, leaderboard) ---- */
+  /* ---- Hero ---- */
+  .hero{ text-align:center; padding:24px 0 12px; }
+  .hero-eyebrow{
+    display:inline-block; font-size:0.7rem; letter-spacing:2px;
+    color:var(--primary-2); font-weight:700; margin-bottom:10px;
+  }
+  .hero h1{
+    font-size:2.1rem; font-weight:800; margin:0 0 8px; line-height:1.15;
+    background:linear-gradient(135deg, #fff, #C6D0FF);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero p{ color:var(--text-dim); font-size:0.95rem; margin:0 0 22px; }
+
+  .play-btn{
+    display:block; width:100%; max-width:340px; margin:0 auto;
+    padding:18px; border-radius:16px; font-size:1.1rem; font-weight:800;
+    background:linear-gradient(135deg, var(--primary), var(--primary-2));
+    color:#0A0E1A;
+    box-shadow:0 12px 30px rgba(124,92,255,0.35);
+    transition:transform .15s ease;
+  }
+  .play-btn:active{ transform:scale(0.97); }
+
+  .hero-stats{
+    display:flex; justify-content:center; gap:22px;
+    margin-top:26px; flex-wrap:wrap;
+  }
+  .hero-stat{ text-align:center; }
+  .hero-stat .num{ font-size:1.3rem; font-weight:800; color:var(--gold); }
+  .hero-stat .lbl{ font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+
+  /* ---- Cards ---- */
   .card{
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:16px;
-    padding:20px;
-    margin-top:16px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:18px; padding:22px; margin-top:18px;
   }
-  .section-title{
-    font-size:0.95rem;
-    font-weight:600;
-    margin:0 0 10px;
-    display:flex;
-    align-items:center;
-    gap:6px;
-  }
-  .subtext{ color:var(--text-dim); font-size:0.85rem; margin-bottom:16px; line-height:1.5; }
+  .section-title{ font-size:1rem; font-weight:700; margin:0 0 14px; display:flex; align-items:center; gap:8px; }
+  .subtext{ color:var(--text-dim); font-size:0.85rem; line-height:1.6; margin-bottom:16px; }
 
   input[type="text"]{
-    flex:1;
-    padding:12px 14px;
-    border-radius:10px;
-    border:1px solid var(--line);
-    background:var(--bg-deep);
-    color:var(--text);
-    font-size:1rem;
-    font-family:inherit;
+    flex:1; padding:13px 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--bg-elevated); color:var(--text); font-size:1rem; font-family:inherit;
   }
-  button{ font-family:inherit; cursor:pointer; border:none; }
-  .city-row{ display:flex; gap:8px; }
-  .name-input{ margin-top:10px; display:flex; gap:8px; }
+  .row{ display:flex; gap:8px; }
+  .btn{
+    padding:13px 16px; border-radius:10px; font-weight:700; font-size:0.9rem;
+  }
+  .btn-primary{ background:linear-gradient(135deg, var(--primary), var(--primary-2)); color:#0A0E1A; }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border:1px solid var(--line); }
 
-  .btn-loc, .btn-city{
-    background:var(--rain);
-    color:#04223a;
-    font-weight:700;
-    padding:12px 14px;
-    border-radius:10px;
-    font-size:0.9rem;
+  /* ---- Challenge flow ---- */
+  .battle-screen{ text-align:center; padding:30px 0; }
+  .countdown-num{
+    font-size:5rem; font-weight:800;
+    background:linear-gradient(135deg, var(--primary), var(--primary-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:pulseIn 0.9s ease;
   }
+  @keyframes pulseIn{ 0%{ transform:scale(0.5); opacity:0; } 60%{ transform:scale(1.1); } 100%{ transform:scale(1); opacity:1; } }
 
-  /* ---- Prediction ticket ---- */
-  .ticket{
-    position:relative;
-    margin-top:20px;
-    background:var(--surface);
-    border:1px solid var(--line);
-    border-radius:18px;
-    padding:22px 20px 18px;
-    overflow:visible;
-  }
-  .ticket::before, .ticket::after{
-    content:"";
-    position:absolute;
-    top:50%;
-    width:20px; height:20px;
-    background:var(--bg);
-    border-radius:50%;
-    transform:translateY(-50%);
-  }
-  .ticket::before{ left:-10px; }
-  .ticket::after{ right:-10px; }
-  .ticket-perforation{
-    border-top:2px dashed var(--line);
-    margin:18px 0;
-  }
-  .question{
-    font-size:1.2rem;
-    font-weight:700;
-    line-height:1.35;
-    margin:0 0 6px;
-  }
-  .question .city-name{ color:var(--rain); }
-  .forecast-hint{ color:var(--text-dim); font-size:0.82rem; margin-bottom:4px; }
-
-  .countdown{
-    margin-top:14px;
-    text-align:center;
-  }
-  .countdown-label{
-    font-size:0.7rem;
-    color:var(--text-dim);
+  .q-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .q-progress{ font-size:0.75rem; color:var(--text-dim); font-weight:600; letter-spacing:0.5px; }
+  .q-category{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:0.7rem; font-weight:700; letter-spacing:1px;
+    padding:4px 10px; border-radius:20px;
+    background:rgba(124,92,255,0.15); color:var(--primary-2);
     text-transform:uppercase;
-    letter-spacing:1px;
-    margin-bottom:4px;
   }
-  .countdown-time{
-    font-size:1.6rem;
-    font-weight:700;
-    font-variant-numeric:tabular-nums;
-    letter-spacing:1px;
-  }
-  .countdown-bar{
-    margin-top:8px;
-    height:5px;
-    border-radius:3px;
-    background:var(--bg-deep);
-    overflow:hidden;
-  }
-  .countdown-bar-fill{
-    height:100%;
-    background:linear-gradient(90deg, var(--rain), var(--sun));
-    width:0%;
-    transition:width 1s linear;
-  }
+  .q-timer{ font-size:1.1rem; font-weight:800; font-variant-numeric:tabular-nums; }
+  .q-timer.low{ color:var(--bad); }
 
-  .choice-row{ display:flex; gap:12px; margin-top:16px; }
-  .choice{
-    flex:1;
-    padding:20px 0;
-    border-radius:14px;
-    font-size:1.05rem;
-    font-weight:700;
-    color:#04223a;
-    transition:transform .12s ease, filter .12s ease;
-  }
-  .choice:active{ transform:scale(0.95); }
-  .choice.yes{ background:var(--rain); }
-  .choice.no{ background:var(--sun); }
-  .choice:hover{ filter:brightness(1.08); }
+  .timer-bar{ height:5px; border-radius:3px; background:var(--bg-elevated); overflow:hidden; margin-bottom:20px; }
+  .timer-bar-fill{ height:100%; background:linear-gradient(90deg, var(--primary-2), var(--primary)); width:100%; transition:width 0.1s linear; }
 
-  .locked-msg{
-    text-align:center;
-    padding:14px 4px 2px;
-    color:var(--text-dim);
-    font-size:0.92rem;
-    line-height:1.5;
-  }
-  .locked-msg.result-good{ color:var(--good); font-weight:600; }
-  .locked-msg.result-bad{ color:var(--bad); font-weight:600; }
+  .question-prompt{ font-size:1.25rem; font-weight:700; line-height:1.4; margin-bottom:22px; }
 
-  .reveal-pop{
-    animation:pop 0.5s ease;
+  .options-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .option-btn{
+    padding:20px 10px; border-radius:14px; font-size:1.15rem; font-weight:700;
+    background:var(--surface-2); color:var(--text); border:2px solid transparent;
+    transition:all .12s ease;
   }
-  @keyframes pop{
-    0%{ transform:scale(1); }
-    30%{ transform:scale(1.06); }
-    100%{ transform:scale(1); }
-  }
+  .option-btn:active{ transform:scale(0.96); }
+  .option-btn.correct{ background:rgba(74,222,128,0.15); border-color:var(--good); color:var(--good); }
+  .option-btn.incorrect{ background:rgba(251,113,133,0.15); border-color:var(--bad); color:var(--bad); }
+  .option-btn.dimmed{ opacity:0.4; }
 
-  /* ---- Scoreboard stats strip ---- */
-  .scoreboard{
-    display:flex;
-    margin-top:18px;
-    border-top:1px solid var(--line);
-    padding-top:14px;
+  .points-flash{
+    font-size:2rem; font-weight:800; margin:18px 0 0;
+    animation:floatUp 1s ease forwards;
   }
-  .scoreboard .stat{
-    flex:1;
-    text-align:center;
-    position:relative;
-  }
-  .scoreboard .stat:not(:last-child)::after{
-    content:"";
-    position:absolute;
-    right:0; top:10%;
-    height:80%;
-    width:1px;
-    background:var(--line);
-  }
-  .scoreboard .num{
-    font-size:1.5rem;
-    font-weight:700;
-    font-variant-numeric:tabular-nums;
-    color:var(--sun);
-  }
-  .scoreboard .num.accent-rain{ color:var(--rain); }
-  .scoreboard .lbl{
-    font-size:0.65rem;
-    color:var(--text-dim);
-    text-transform:uppercase;
-    letter-spacing:1px;
-    margin-top:2px;
-  }
+  .points-flash.good{ color:var(--good); }
+  .points-flash.bad{ color:var(--bad); }
+  @keyframes floatUp{ 0%{ transform:translateY(10px); opacity:0; } 30%{ opacity:1; transform:translateY(0);} 100%{ opacity:1; } }
 
-  .change-city-row{ text-align:center; margin-top:14px; }
-  .change-city-row button{
-    background:none;
-    color:var(--text-dim);
-    font-size:0.78rem;
-    text-decoration:underline;
-    padding:6px;
-    font-family:'Inter',sans-serif;
-  }
+  .live-score{ font-size:0.85rem; color:var(--text-dim); margin-top:8px; }
+  .live-score b{ color:var(--gold); }
 
-  .ad-slot{
-    background:var(--surface);
-    border:1px dashed var(--line);
-    border-radius:12px;
-    padding:14px;
-    text-align:center;
-    color:var(--text-dim);
-    font-size:0.72rem;
-    margin-top:16px;
+  /* ---- Result screen ---- */
+  .result-card{ text-align:center; padding:10px 0; }
+  .result-score{
+    font-size:3.2rem; font-weight:800; margin:10px 0 4px;
+    background:linear-gradient(135deg, var(--gold), var(--primary-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
   }
+  .result-sub{ color:var(--text-dim); font-size:0.9rem; margin-bottom:18px; }
+  .result-cats{ display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin:16px 0; }
+  .result-cat-chip{
+    font-size:0.75rem; font-weight:600; padding:6px 12px; border-radius:20px;
+    background:var(--surface-2); border:1px solid var(--line);
+  }
+  .result-cat-chip.ok{ color:var(--good); }
+  .result-cat-chip.no{ color:var(--bad); }
 
   /* ---- Leaderboard ---- */
   .lb-row{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:9px 0;
-    border-bottom:1px solid var(--line);
-    font-size:0.9rem;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 4px; border-bottom:1px solid var(--line);
   }
   .lb-row:last-child{ border-bottom:none; }
   .lb-left{ display:flex; align-items:center; gap:10px; }
   .lb-rank{
-    color:var(--text-dim);
-    font-size:0.8rem;
-    width:16px;
-    font-variant-numeric:tabular-nums;
+    width:26px; text-align:center; font-weight:800; font-size:0.85rem;
+    color:var(--text-dim); font-variant-numeric:tabular-nums;
   }
-  .lb-streak{ font-variant-numeric:tabular-nums; color:var(--sun); font-weight:600; }
+  .lb-rank.top1{ color:var(--gold); }
+  .lb-rank.top2{ color:#C7D2E8; }
+  .lb-rank.top3{ color:#D89A66; }
+  .lb-score{ font-weight:700; font-variant-numeric:tabular-nums; color:var(--primary-2); }
+  .lb-row.you{ background:rgba(124,92,255,0.1); border-radius:10px; padding:11px 8px; }
+
+  .sticky-you{
+    position:sticky; bottom:10px; margin-top:14px;
+    background:var(--surface-2); border:1px solid var(--primary);
+    border-radius:14px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+
+  /* ---- Profile ---- */
+  .profile-header{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+  .profile-avatar{
+    width:56px; height:56px; border-radius:50%; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:1.2rem; color:#0A0E1A;
+  }
+  .profile-avatar img{ width:100%; height:100%; object-fit:cover; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:16px; }
+  .stat-box{ background:var(--surface-2); border-radius:12px; padding:12px; text-align:center; }
+  .stat-box .num{ font-size:1.2rem; font-weight:800; color:var(--gold); }
+  .stat-box .lbl{ font-size:0.62rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
 
   .toast{
-    position:fixed;
-    bottom:20px; left:50%;
-    transform:translateX(-50%);
-    background:var(--surface);
-    border:1px solid var(--line);
-    padding:10px 18px;
-    border-radius:30px;
-    font-size:0.85rem;
-    box-shadow:0 6px 20px rgba(0,0,0,0.35);
-    opacity:0;
-    transition:opacity .3s ease;
-    pointer-events:none;
-    max-width:90%;
-    text-align:center;
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--surface); border:1px solid var(--line);
+    padding:10px 18px; border-radius:30px; font-size:0.85rem;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    opacity:0; transition:opacity .3s ease; pointer-events:none;
+    max-width:90%; text-align:center; z-index:50;
   }
   .toast.show{ opacity:1; }
-  .hidden{ display:none !important; }
-  a{ color:var(--rain); }
-  .footer-note{
-    text-align:center;
-    color:var(--text-dim);
-    font-size:0.68rem;
-    margin-top:24px;
-    padding:0 20px;
-    line-height:1.6;
-  }
+
+  .footer-note{ text-align:center; color:var(--text-dim); font-size:0.68rem; margin-top:30px; padding:0 20px; line-height:1.7; }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="header-top">
-    <div></div>
-    <div class="brand">
-      <h1>🌦️ WeatherWise</h1>
-      <p class="tagline">Predict the sky. Build your streak.</p>
-    </div>
-    <div id="avatar-wrap" class="hidden">
-      <button id="avatar-btn" class="avatar-btn"></button>
-      <div id="avatar-menu" class="avatar-menu hidden">
-        <div id="avatar-menu-name" class="avatar-menu-name"></div>
-        <button id="signout-btn" class="avatar-menu-item">Sign out</button>
-      </div>
+<nav>
+  <div class="logo"><span class="mark">DBB</span> Daily Brain Battle</div>
+  <div id="avatar-wrap" class="hidden">
+    <button id="avatar-btn" class="avatar-btn"></button>
+    <div id="avatar-menu" class="avatar-menu hidden">
+      <div id="avatar-menu-name" class="avatar-menu-name"></div>
+      <button id="nav-profile-btn" class="avatar-menu-item">👤 Profile</button>
+      <button id="nav-leaderboard-btn" class="avatar-menu-item">🏆 Leaderboard</button>
+      <button id="signout-btn" class="avatar-menu-item">Sign out</button>
     </div>
   </div>
-</header>
+</nav>
 
 <div class="container">
 
-  <!-- Auth card -->
-  <div class="card" id="auth-card">
-    <div class="section-title">👋 Welcome</div>
-    <p class="subtext">Sign in to start predicting and track your streak.</p>
-    <button class="btn-loc" id="google-btn" style="width:100%; margin-bottom:12px; background:var(--surface-2); color:var(--text); border:1px solid var(--line);">Continue with Google</button>
+  <!-- AUTH -->
+  <div class="card hidden" id="auth-card">
+    <div class="section-title">👋 Welcome, challenger</div>
+    <p class="subtext">Sign in to play today's battle and appear on the leaderboard.</p>
+    <button class="btn btn-ghost" id="google-btn" style="width:100%; margin-bottom:12px;">Continue with Google</button>
     <div class="subtext" style="text-align:center; margin:8px 0;">or</div>
-    <div class="city-row">
+    <div class="row">
       <input type="text" id="email-input" placeholder="you@example.com" />
-      <button class="btn-city" id="email-btn">Send link</button>
+      <button class="btn btn-primary" id="email-btn">Send link</button>
     </div>
     <div class="subtext" id="auth-status" style="margin-top:10px; margin-bottom:0;"></div>
   </div>
 
-  <!-- Name picker -->
+  <!-- NAME PICKER -->
   <div class="card hidden" id="namepicker-card">
-    <div class="section-title">✏️ What should we call you?</div>
-    <div class="name-input">
+    <div class="section-title">✏️ Pick your battle name</div>
+    <div class="row">
       <input type="text" id="namepicker-input" placeholder="Your name" maxlength="20" />
-      <button class="btn-city" id="namepicker-save">Continue</button>
+      <button class="btn btn-primary" id="namepicker-save">Continue</button>
     </div>
   </div>
 
-  <!-- City setup -->
-  <div class="card hidden" id="city-card">
-    <div class="section-title">📍 Set your city</div>
-    <div class="city-row">
-      <input type="text" id="city-input" placeholder="e.g. Lagos, Nigeria" />
-      <button class="btn-city" id="city-submit">Go</button>
-    </div>
-    <div class="name-input">
-      <button class="btn-loc" id="loc-btn" style="width:100%;">📡 Use my current location</button>
-    </div>
-  </div>
-
-  <!-- Prediction ticket -->
-  <div class="ticket hidden" id="predict-card">
-    <div class="question">Will it rain in <span class="city-name" id="city-label"></span> by 3pm today?</div>
-    <div class="forecast-hint" id="forecast-hint">Loading forecast hint…</div>
-
-    <div class="choice-row" id="choice-row">
-      <button class="choice yes" data-val="yes">☔ Yes</button>
-      <button class="choice no" data-val="no">☀️ No</button>
+  <!-- HOMEPAGE / HERO -->
+  <div id="home-view" class="hidden">
+    <div class="hero">
+      <span class="hero-eyebrow">DAY <span id="hero-day-num">1</span> · TODAY'S BRAIN BATTLE</span>
+      <h1>Think Fast.<br/>Rank Higher.</h1>
+      <p>5 challenges. 5 minutes. One leaderboard.</p>
+      <button class="play-btn" id="play-btn">PLAY TODAY'S BATTLE</button>
+      <div class="hero-stats">
+        <div class="hero-stat"><div class="num" id="hero-streak">🔥 0</div><div class="lbl">Day Streak</div></div>
+        <div class="hero-stat"><div class="num" id="hero-players">–</div><div class="lbl">Played Today</div></div>
+        <div class="hero-stat"><div class="num" id="hero-countdown">--:--:--</div><div class="lbl">Reset In</div></div>
+      </div>
     </div>
 
-    <div class="countdown hidden" id="countdown-wrap">
-      <div class="countdown-label">Reveals in</div>
-      <div class="countdown-time" id="countdown-time">--:--:--</div>
-      <div class="countdown-bar"><div class="countdown-bar-fill" id="countdown-bar-fill"></div></div>
+    <div class="card" id="already-played-card" style="display:none;">
+      <div class="section-title">✅ You've already battled today</div>
+      <p class="subtext" id="already-played-text"></p>
+      <button class="btn btn-primary" id="view-leaderboard-from-home" style="width:100%;">View Leaderboard</button>
     </div>
 
-    <div class="locked-msg hidden" id="locked-msg"></div>
-
-    <div class="ticket-perforation"></div>
-
-    <div class="scoreboard">
-      <div class="stat"><div class="num" id="stat-streak">0</div><div class="lbl">Streak</div></div>
-      <div class="stat"><div class="num" id="stat-best">0</div><div class="lbl">Best</div></div>
-      <div class="stat"><div class="num accent-rain" id="stat-acc">0%</div><div class="lbl">Accuracy</div></div>
-    </div>
-
-    <div class="change-city-row">
-      <button id="change-city-btn">📍 Change city</button>
+    <div class="card" id="home-leaderboard-preview">
+      <div class="section-title">🏆 Today's Top Players</div>
+      <div id="home-leaderboard-list"></div>
     </div>
   </div>
 
-  <div class="ad-slot" id="ad-slot-1">Ad space (banner) — connect AdSense here</div>
+  <!-- BATTLE FLOW -->
+  <div id="battle-view" class="hidden">
+    <div class="battle-screen" id="battle-countdown">
+      <div class="countdown-num" id="countdown-num">3</div>
+    </div>
 
-  <!-- Leaderboard -->
-  <div class="card hidden" id="leaderboard-card">
-    <div class="section-title">🏆 Top Streaks</div>
-    <div id="leaderboard-list"></div>
+    <div class="card hidden" id="question-card">
+      <div class="q-header">
+        <span class="q-progress">CHALLENGE <span id="q-num">1</span> OF 5</span>
+        <span class="q-timer" id="q-timer">00:20</span>
+      </div>
+      <div class="timer-bar"><div class="timer-bar-fill" id="q-timer-fill"></div></div>
+      <div class="q-category" id="q-category">⚡ SPEED</div>
+      <div class="question-prompt" id="q-prompt" style="margin-top:16px;"></div>
+      <div class="options-grid" id="q-options"></div>
+      <div class="points-flash hidden" id="points-flash"></div>
+      <div class="live-score">SCORE SO FAR: <b id="live-score-num">0</b></div>
+    </div>
   </div>
 
-  <div class="footer-note">Weather data via Open-Meteo. Predictions resolve automatically after 3pm local time.</div>
+  <!-- RESULT -->
+  <div id="result-view" class="hidden">
+    <div class="card result-card">
+      <div class="section-title" style="justify-content:center;">🧠 BATTLE COMPLETE</div>
+      <div class="result-score" id="result-score">0 / 500</div>
+      <div class="result-sub" id="result-rank">Calculating rank…</div>
+      <div class="result-cats" id="result-cats"></div>
+      <div class="row" style="margin-top:20px;">
+        <button class="btn btn-ghost" id="result-leaderboard-btn" style="flex:1;">View Leaderboard</button>
+        <button class="btn btn-primary" id="result-share-btn" style="flex:1;">Share Result</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div id="leaderboard-view" class="hidden">
+    <div class="card">
+      <div class="section-title">🏆 Today's Leaderboard — Day <span id="lb-day-num">1</span></div>
+      <div id="leaderboard-list"></div>
+    </div>
+    <div class="sticky-you hidden" id="sticky-you">
+      <span>#<span id="sticky-rank">–</span> YOU</span>
+      <span class="lb-score" id="sticky-score">0 PTS</span>
+    </div>
+  </div>
+
+  <!-- PROFILE -->
+  <div id="profile-view" class="hidden">
+    <div class="card">
+      <div class="profile-header">
+        <div class="profile-avatar" id="profile-avatar"></div>
+        <div>
+          <div style="font-weight:800; font-size:1.1rem;" id="profile-name"></div>
+          <div class="subtext" style="margin:0;" id="profile-level">Level 1</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="num" id="p-streak">0</div><div class="lbl">Streak</div></div>
+        <div class="stat-box"><div class="num" id="p-best-streak">0</div><div class="lbl">Best Streak</div></div>
+        <div class="stat-box"><div class="num" id="p-battles">0</div><div class="lbl">Battles</div></div>
+        <div class="stat-box"><div class="num" id="p-best-score">0</div><div class="lbl">Best Score</div></div>
+        <div class="stat-box"><div class="num" id="p-correct">0</div><div class="lbl">Correct</div></div>
+        <div class="stat-box"><div class="num" id="p-xp">0</div><div class="lbl">XP</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">Daily Brain Battle · New challenges every day at midnight UTC.</div>
 </div>
 
 <div class="toast" id="toast"></div>

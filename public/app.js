@@ -3,9 +3,6 @@ const SUPABASE_URL = "https://yontcnqyosjcjhxjzzdq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_-kwUgVg_19Q42OIfdWi-6g_UMpaOs_d";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const RAIN_THRESHOLD_MM = 1.0; // total mm across the day before we call it "rain" — filters out trace/drizzle noise in the forecast model
-const CUTOFF_HOUR = 15; // 3pm
-
 const $ = (sel) => document.querySelector(sel);
 const toast = (msg, ms = 2500) => {
   const t = $("#toast");
@@ -14,474 +11,422 @@ const toast = (msg, ms = 2500) => {
   setTimeout(() => t.classList.remove("show"), ms);
 };
 
-let city = JSON.parse(localStorage.getItem("rc_city") || "null");
 let session = null;
 let profile = null;
+let todayChallenge = null;
+let questions = [];
+let currentQIndex = 0;
+let sessionScore = 0;
+let categoryResults = [];
+let questionStartTime = 0;
+let qTimerInterval = null;
 
-function todayStrInTz(tz) {
-  const now = new Date();
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-  return fmt.format(now);
-}
+const CATEGORY_ICONS = { logic: "🧩", speed: "⚡", memory: "🧠", visual: "👁️", pattern: "🔷" };
 
-// ---- Avatar helpers ----
 function initialsFor(name) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
-
 function colorFor(seed) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 55%, 45%)`;
+  return `hsl(${Math.abs(hash) % 360}, 60%, 50%)`;
 }
-
-function renderAvatarButton(name, avatarUrl) {
-  const btn = $("#avatar-btn");
-  if (avatarUrl) {
-    btn.innerHTML = `<img src="${avatarUrl}" alt="${name}" referrerpolicy="no-referrer" />`;
-    btn.style.background = "transparent";
-  } else {
-    btn.textContent = initialsFor(name);
-    btn.style.background = colorFor(name || "?");
-  }
-  $("#avatar-wrap").classList.remove("hidden");
-  $("#avatar-menu-name").textContent = name;
-}
-
-function smallAvatarHtml(name, avatarUrl) {
-  if (avatarUrl) {
-    return `<img src="${avatarUrl}" alt="" referrerpolicy="no-referrer" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;" />`;
-  }
-  const initials = initialsFor(name);
-  const bg = colorFor(name || "?");
-  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${bg};color:#fff;font-size:0.65rem;font-weight:800;vertical-align:middle;margin-right:8px;">${initials}</span>`;
+function avatarHtml(name, url, size = 24) {
+  if (url) return `<img src="${url}" alt="" referrerpolicy="no-referrer" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;vertical-align:middle;" />`;
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:${colorFor(name || "?")};color:#fff;font-size:${size * 0.4}px;font-weight:800;vertical-align:middle;">${initialsFor(name)}</span>`;
 }
 
 // ---- Auth ----
 $("#google-btn").addEventListener("click", async () => {
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: window.location.origin },
-  });
+  const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
   if (error) toast("Google sign-in isn't set up yet — try email instead");
 });
 
 $("#email-btn").addEventListener("click", async () => {
   const email = $("#email-input").value.trim();
   if (!email) return;
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  });
-  if (error) {
-    $("#auth-status").textContent = "Something went wrong — try again.";
-  } else {
-    $("#auth-status").textContent = `Check ${email} for a sign-in link.`;
-  }
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+  $("#auth-status").textContent = error ? "Something went wrong — try again." : `Check ${email} for a sign-in link.`;
 });
 
-$("#avatar-btn").addEventListener("click", () => {
-  $("#avatar-menu").classList.toggle("hidden");
-});
-
-$("#signout-btn").addEventListener("click", async () => {
-  await sb.auth.signOut();
-  window.location.reload();
-});
+$("#avatar-btn").addEventListener("click", () => $("#avatar-menu").classList.toggle("hidden"));
+$("#signout-btn").addEventListener("click", async () => { await sb.auth.signOut(); window.location.reload(); });
+$("#nav-profile-btn").addEventListener("click", () => { $("#avatar-menu").classList.add("hidden"); showProfile(); });
+$("#nav-leaderboard-btn").addEventListener("click", () => { $("#avatar-menu").classList.add("hidden"); showLeaderboard(); });
+$("#view-leaderboard-from-home").addEventListener("click", showLeaderboard);
+$("#result-leaderboard-btn").addEventListener("click", showLeaderboard);
 
 async function ensureProfile() {
   const user = session.user;
-  let { data, error } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
-  if (error) console.error(error);
+  let { data } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
 
   if (!data) {
-    // First time this account has ever signed in — ask what to call them.
-    const suggested =
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      (user.email ? user.email.split("@")[0] : "Player");
+    const suggested = user.user_metadata?.full_name || user.user_metadata?.name || (user.email ? user.email.split("@")[0] : "Player");
     $("#namepicker-input").value = suggested;
     $("#namepicker-card").classList.remove("hidden");
     $("#namepicker-save").onclick = async () => {
       const chosen = $("#namepicker-input").value.trim().slice(0, 20) || suggested;
       const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-      const { data: created, error: insErr } = await sb
-        .from("profiles")
-        .insert({ id: user.id, display_name: chosen, avatar_url: avatarUrl })
-        .select()
-        .single();
-      if (insErr) { console.error(insErr); toast("Could not save profile"); return; }
+      const { data: created, error } = await sb.from("profiles").insert({ id: user.id, display_name: chosen, avatar_url: avatarUrl }).select().single();
+      if (error) { toast("Could not save profile"); return; }
       profile = created;
       $("#namepicker-card").classList.add("hidden");
-      renderAvatarButton(profile.display_name, profile.avatar_url);
-      renderStats();
+      renderAvatarButton();
       afterAuthReady();
     };
-    return; // wait for name picker submission
+    return;
   }
-
   profile = data;
-  renderAvatarButton(profile.display_name, profile.avatar_url);
-  renderStats();
+  renderAvatarButton();
   afterAuthReady();
 }
 
-function renderStats() {
-  if (!profile) return;
-  $("#stat-streak").textContent = profile.current_streak;
-  $("#stat-best").textContent = profile.best_streak;
-  const acc = profile.total_predictions > 0 ? Math.round((profile.total_correct / profile.total_predictions) * 100) : 0;
-  $("#stat-acc").textContent = acc + "%";
+function renderAvatarButton() {
+  const btn = $("#avatar-btn");
+  if (profile.avatar_url) {
+    btn.innerHTML = `<img src="${profile.avatar_url}" referrerpolicy="no-referrer" />`;
+    btn.style.background = "transparent";
+  } else {
+    btn.textContent = initialsFor(profile.display_name);
+    btn.style.background = colorFor(profile.display_name);
+  }
+  $("#avatar-wrap").classList.remove("hidden");
+  $("#avatar-menu-name").textContent = profile.display_name;
 }
 
-// Runs once we have both a session and a profile row.
 async function afterAuthReady() {
   $("#auth-card").classList.add("hidden");
-  if (city) {
-    await enterCityMode();
-  } else {
-    $("#city-card").classList.remove("hidden");
-  }
-  await loadLeaderboard();
+  await loadTodayChallenge();
+  showHome();
 }
 
-// ---- Countdown to 3pm ----
-let countdownInterval = null;
-
-function secondsSinceMidnightInTz(tz) {
-  const now = new Date();
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
-  const parts = fmt.formatToParts(now);
-  const get = (t) => parseInt(parts.find((p) => p.type === t).value, 10);
-  let h = get("hour");
-  if (h === 24) h = 0;
-  return h * 3600 + get("minute") * 60 + get("second");
+// ---- Load today's challenge ----
+async function loadTodayChallenge() {
+  const { data: challenge } = await sb.from("daily_challenges").select("*").eq("published", true).order("day_number", { ascending: false }).limit(1).maybeSingle();
+  if (!challenge) { toast("No battle available right now"); return; }
+  todayChallenge = challenge;
+  const { data: qs } = await sb.from("challenge_questions").select("*").eq("daily_challenge_id", challenge.id).order("order_index");
+  questions = qs || [];
 }
 
-function startCountdown() {
-  if (countdownInterval) clearInterval(countdownInterval);
-  const cutoffSeconds = CUTOFF_HOUR * 3600;
-
+// ---- Reset countdown (UTC midnight, global for everyone) ----
+function startResetCountdown() {
   function tick() {
-    const elapsed = secondsSinceMidnightInTz(city.timezone);
-    const remaining = cutoffSeconds - elapsed;
-    const wrap = $("#countdown-wrap");
-
-    if (remaining <= 0) {
-      wrap.classList.add("hidden");
-      clearInterval(countdownInterval);
-      return;
-    }
-    wrap.classList.remove("hidden");
-    const h = Math.floor(remaining / 3600);
-    const m = Math.floor((remaining % 3600) / 60);
-    const s = remaining % 60;
-    $("#countdown-time").textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    const pctElapsed = ((cutoffSeconds - remaining) / cutoffSeconds) * 100;
-    $("#countdown-bar-fill").style.width = `${Math.min(100, pctElapsed)}%`;
+    const now = new Date();
+    const nextUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+    const diff = nextUtcMidnight - now;
+    const h = String(Math.floor(diff / 3600000)).padStart(2, "0");
+    const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+    const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+    $("#hero-countdown").textContent = `${h}:${m}:${s}`;
   }
   tick();
-  countdownInterval = setInterval(tick, 1000);
+  setInterval(tick, 1000);
 }
 
-// ---- City setup ----
-async function geocodeCity(name) {
-  const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`);
-  const json = await res.json();
-  if (!json.results || json.results.length === 0) return null;
-  const r = json.results[0];
-  return { name: `${r.name}${r.admin1 ? ", " + r.admin1 : ""}${r.country ? ", " + r.country : ""}`, lat: r.latitude, lon: r.longitude, timezone: r.timezone };
+// ---- Views ----
+function hideAllViews() {
+  ["home-view", "battle-view", "result-view", "leaderboard-view", "profile-view"].forEach((id) => $(`#${id}`).classList.add("hidden"));
 }
 
-async function reverseGeocode(lat, lon) {
-  try {
-    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-    const json = await res.json();
-    const city = json.city || json.locality || json.principalSubdivision;
-    const country = json.countryName;
-    if (city && country) return `${city}, ${country}`;
-    if (city) return city;
-    return "Your Location";
-  } catch (e) {
-    return "Your Location";
-  }
-}
+async function showHome() {
+  hideAllViews();
+  $("#home-view").classList.remove("hidden");
+  $("#hero-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
+  $("#hero-streak").textContent = `🔥 ${profile.current_streak}`;
 
-async function enterCityMode() {
-  $("#city-card").classList.add("hidden");
-  $("#predict-card").classList.remove("hidden");
-  $("#leaderboard-card").classList.remove("hidden");
-  $("#city-label").textContent = city.name;
-  await refreshForecastHint();
-  await refreshTodayState();
-  await resolveTodayIfPastCutoff();
-  await resolvePastPredictions();
-  startCountdown();
-}
+  const { count } = await sb.from("daily_results").select("id", { count: "exact", head: true }).eq("daily_challenge_id", todayChallenge.id).not("completed_at", "is", null);
+  $("#hero-players").textContent = count ?? 0;
 
-async function setCity(cityObj) {
-  city = cityObj;
-  localStorage.setItem("rc_city", JSON.stringify(city));
-  await enterCityMode();
-}
-
-$("#city-submit").addEventListener("click", async () => {
-  const val = $("#city-input").value.trim();
-  if (!val) return;
-  toast("Looking up city…");
-  const result = await geocodeCity(val);
-  if (!result) { toast("City not found, try again"); return; }
-  await setCity(result);
-});
-
-$("#loc-btn").addEventListener("click", () => {
-  if (!navigator.geolocation) { toast("Geolocation not supported"); return; }
-  toast("Getting your location…");
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const lat = pos.coords.latitude, lon = pos.coords.longitude;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const name = await reverseGeocode(lat, lon);
-    await setCity({ name, lat, lon, timezone: tz });
-  }, () => toast("Location permission denied"));
-});
-
-$("#change-city-btn").addEventListener("click", () => {
-  localStorage.removeItem("rc_city");
-  city = null;
-  $("#predict-card").classList.add("hidden");
-  $("#leaderboard-card").classList.add("hidden");
-  $("#city-card").classList.remove("hidden");
-  toast("Pick a new city or use your location");
-});
-
-// ---- Forecast hint ----
-async function refreshForecastHint() {
-  if (!city) return;
-  try {
-    const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=precipitation_probability&timezone=${encodeURIComponent(city.timezone)}&forecast_days=1`
-    );
-    const json = await res.json();
-    const hours = json.hourly.time;
-    const probs = json.hourly.precipitation_probability;
-    const idx = hours.findIndex((h) => new Date(h).getHours() === CUTOFF_HOUR);
-    const prob = idx >= 0 ? probs[idx] : null;
-    $("#forecast-hint").textContent = prob !== null
-      ? `Official forecast: ${prob}% chance of rain by 3pm. Think you know better?`
-      : `Make your call for today.`;
-  } catch (e) {
-    $("#forecast-hint").textContent = "Make your call for today.";
-  }
-}
-
-// ---- Today's prediction ----
-async function refreshTodayState() {
-  const today = todayStrInTz(city.timezone);
-  const { data } = await sb
-    .from("predictions")
-    .select("*")
-    .eq("profile_id", profile.id)
-    .eq("prediction_date", today)
-    .eq("question_type", "rain_by_3pm")
-    .maybeSingle();
-
-  const choiceRow = $("#choice-row");
-  const lockedMsg = $("#locked-msg");
-  const countdownWrap = $("#countdown-wrap");
-
-  if (data) {
-    choiceRow.classList.add("hidden");
-    lockedMsg.classList.remove("hidden");
-    lockedMsg.classList.remove("result-good", "result-bad", "reveal-pop");
-    if (data.resolved) {
-      countdownWrap.classList.add("hidden");
-      if (data.correct) {
-        lockedMsg.textContent = `✅ You called it! It ${data.actual_value === "yes" ? "did" : "did not"} rain.`;
-        lockedMsg.classList.add("result-good", "reveal-pop");
-      } else {
-        lockedMsg.textContent = `❌ Missed it. It ${data.actual_value === "yes" ? "did" : "did not"} rain — you said ${data.predicted_value}.`;
-        lockedMsg.classList.add("result-bad");
-      }
-    } else {
-      lockedMsg.textContent = `You predicted "${data.predicted_value}". Hang tight for the reveal!`;
-    }
+  const { data: myResult } = await sb.from("daily_results").select("*").eq("profile_id", profile.id).eq("daily_challenge_id", todayChallenge.id).maybeSingle();
+  if (myResult && myResult.completed_at) {
+    $("#already-played-card").style.display = "block";
+    $("#already-played-text").textContent = `You scored ${myResult.total_score}/500 today. Come back tomorrow for a new battle!`;
+    $("#play-btn").textContent = "REVIEW YOUR RESULT";
   } else {
-    choiceRow.classList.remove("hidden");
-    lockedMsg.classList.add("hidden");
+    $("#already-played-card").style.display = "none";
+    $("#play-btn").textContent = "PLAY TODAY'S BATTLE";
   }
+
+  await renderLeaderboard("#home-leaderboard-list", 5, false);
 }
 
-document.querySelectorAll(".choice").forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    const val = btn.dataset.val;
-    const today = todayStrInTz(city.timezone);
-    const { error } = await sb.from("predictions").insert({
-      profile_id: profile.id,
-      prediction_date: today,
-      city: city.name,
-      lat: city.lat,
-      lon: city.lon,
-      question_type: "rain_by_3pm",
-      predicted_value: val,
-    });
-    if (error) {
-      toast("Could not save — maybe already predicted today?");
-      console.error(error);
-    } else {
-      toast("Prediction locked in! 🔒");
-    }
-    await refreshTodayState();
-  });
+$("#play-btn").addEventListener("click", async () => {
+  const { data: myResult } = await sb.from("daily_results").select("*").eq("profile_id", profile.id).eq("daily_challenge_id", todayChallenge.id).maybeSingle();
+  if (myResult && myResult.completed_at) { showResultFromExisting(myResult); return; }
+  startBattle();
 });
 
-// ---- Resolve TODAY's prediction the moment 3pm passes (same-day, not tomorrow) ----
-async function resolveTodayIfPastCutoff() {
-  const elapsed = secondsSinceMidnightInTz(city.timezone);
-  if (elapsed < CUTOFF_HOUR * 3600) return; // not 3pm yet
+// ---- Battle flow ----
+function startBattle() {
+  hideAllViews();
+  $("#battle-view").classList.remove("hidden");
+  $("#battle-countdown").classList.remove("hidden");
+  $("#question-card").classList.add("hidden");
+  currentQIndex = 0;
+  sessionScore = 0;
+  categoryResults = [];
 
-  const today = todayStrInTz(city.timezone);
-  const { data: pred } = await sb
-    .from("predictions")
-    .select("*")
-    .eq("profile_id", profile.id)
-    .eq("prediction_date", today)
-    .eq("question_type", "rain_by_3pm")
-    .eq("resolved", false)
-    .maybeSingle();
-
-  if (!pred) return;
-
-  try {
-    // Today's data isn't in the archive yet — use the forecast endpoint, which
-    // also carries already-elapsed hours of the current day.
-    const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${pred.lat}&longitude=${pred.lon}&hourly=precipitation&timezone=${encodeURIComponent(city.timezone)}&forecast_days=1`
-    );
-    const json = await res.json();
-    const hours = json.hourly.time;
-    const precs = json.hourly.precipitation;
-    let total = 0;
-    for (let i = 0; i < hours.length; i++) {
-      const h = new Date(hours[i]).getHours();
-      if (h <= CUTOFF_HOUR) total += precs[i] || 0;
+  let n = 3;
+  $("#countdown-num").textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n > 0) {
+      $("#countdown-num").textContent = n;
+      $("#countdown-num").style.animation = "none";
+      void $("#countdown-num").offsetWidth;
+      $("#countdown-num").style.animation = "";
+    } else if (n === 0) {
+      $("#countdown-num").textContent = "GO!";
+    } else {
+      clearInterval(iv);
+      $("#battle-countdown").classList.add("hidden");
+      $("#question-card").classList.remove("hidden");
+      showQuestion();
     }
-    const actual = total >= RAIN_THRESHOLD_MM ? "yes" : "no";
-    const correct = actual === pred.predicted_value;
-
-    await sb.from("predictions").update({ actual_value: actual, correct, resolved: true }).eq("id", pred.id);
-
-    const newStreak = correct ? profile.current_streak + 1 : 0;
-    const newBest = Math.max(profile.best_streak, newStreak);
-    const newTotal = profile.total_predictions + 1;
-    const newCorrect = profile.total_correct + (correct ? 1 : 0);
-
-    await sb.from("profiles").update({
-      current_streak: newStreak,
-      best_streak: newBest,
-      total_predictions: newTotal,
-      total_correct: newCorrect,
-    }).eq("id", profile.id);
-
-    profile.current_streak = newStreak;
-    profile.best_streak = newBest;
-    profile.total_predictions = newTotal;
-    profile.total_correct = newCorrect;
-    renderStats();
-    await refreshTodayState();
-  } catch (e) {
-    console.error("Same-day resolution failed", e);
-  }
+  }, 700);
 }
 
-// ---- Resolve past predictions ----
-async function resolvePastPredictions() {
-  const today = todayStrInTz(city ? city.timezone : "UTC");
-  const { data: unresolved } = await sb
-    .from("predictions")
-    .select("*")
-    .eq("profile_id", profile.id)
-    .eq("resolved", false)
-    .lt("prediction_date", today);
+function showQuestion() {
+  const q = questions[currentQIndex];
+  $("#q-num").textContent = currentQIndex + 1;
+  $("#q-category").textContent = `${CATEGORY_ICONS[q.category] || "🔹"} ${q.category.toUpperCase()}`;
+  $("#q-prompt").textContent = q.prompt;
+  $("#live-score-num").textContent = sessionScore;
+  $("#points-flash").classList.add("hidden");
 
-  if (!unresolved || unresolved.length === 0) return;
+  const optionsWrap = $("#q-options");
+  optionsWrap.innerHTML = "";
+  q.options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.className = "option-btn";
+    btn.textContent = opt;
+    btn.addEventListener("click", () => handleAnswer(opt, btn));
+    optionsWrap.appendChild(btn);
+  });
 
-  for (const pred of unresolved) {
-    try {
-      const res = await fetch(
-        `https://archive-api.open-meteo.com/v1/archive?latitude=${pred.lat}&longitude=${pred.lon}&start_date=${pred.prediction_date}&end_date=${pred.prediction_date}&hourly=precipitation&timezone=auto`
-      );
-      const json = await res.json();
-      const hours = json.hourly.time;
-      const precs = json.hourly.precipitation;
-      let total = 0;
-      for (let i = 0; i < hours.length; i++) {
-        const h = new Date(hours[i]).getHours();
-        if (h <= CUTOFF_HOUR) total += precs[i] || 0;
-      }
-      const actual = total >= RAIN_THRESHOLD_MM ? "yes" : "no";
-      const correct = actual === pred.predicted_value;
+  questionStartTime = Date.now();
+  let remaining = q.time_limit_seconds;
+  const timerEl = $("#q-timer");
+  const fillEl = $("#q-timer-fill");
+  timerEl.classList.remove("low");
+  fillEl.style.width = "100%";
+  updateTimerDisplay(remaining);
 
-      await sb.from("predictions").update({ actual_value: actual, correct, resolved: true }).eq("id", pred.id);
-
-      const newStreak = correct ? profile.current_streak + 1 : 0;
-      const newBest = Math.max(profile.best_streak, newStreak);
-      const newTotal = profile.total_predictions + 1;
-      const newCorrect = profile.total_correct + (correct ? 1 : 0);
-
-      await sb.from("profiles").update({
-        current_streak: newStreak,
-        best_streak: newBest,
-        total_predictions: newTotal,
-        total_correct: newCorrect,
-      }).eq("id", profile.id);
-
-      profile.current_streak = newStreak;
-      profile.best_streak = newBest;
-      profile.total_predictions = newTotal;
-      profile.total_correct = newCorrect;
-    } catch (e) {
-      console.error("Resolution failed for", pred.id, e);
+  if (qTimerInterval) clearInterval(qTimerInterval);
+  qTimerInterval = setInterval(() => {
+    remaining -= 0.1;
+    if (remaining <= 5) timerEl.classList.add("low");
+    fillEl.style.width = `${Math.max(0, (remaining / q.time_limit_seconds) * 100)}%`;
+    updateTimerDisplay(Math.max(0, remaining));
+    if (remaining <= 0) {
+      clearInterval(qTimerInterval);
+      handleAnswer(null, null); // time's up, no answer
     }
+  }, 100);
+}
+
+function updateTimerDisplay(secondsFloat) {
+  const s = Math.ceil(secondsFloat);
+  $("#q-timer").textContent = `00:${String(s).padStart(2, "0")}`;
+}
+
+async function handleAnswer(selected, btnEl) {
+  if (qTimerInterval) clearInterval(qTimerInterval);
+  const q = questions[currentQIndex];
+  const timeTakenMs = Date.now() - questionStartTime;
+  const isCorrect = selected === q.correct_answer;
+
+  // Disable all buttons, show correct/incorrect state
+  document.querySelectorAll(".option-btn").forEach((b) => {
+    b.disabled = true;
+    if (b.textContent === q.correct_answer) b.classList.add("correct");
+    else if (b === btnEl) b.classList.add("incorrect");
+    else b.classList.add("dimmed");
+  });
+
+  let points = 0;
+  if (isCorrect) {
+    const timeLimitMs = q.time_limit_seconds * 1000;
+    const speedFrac = Math.max(0, Math.min(1, 1 - timeTakenMs / timeLimitMs));
+    points = 80 + Math.round(speedFrac * 20); // base 80 + up to 20 speed bonus
   }
-  renderStats();
+  sessionScore = Math.min(500, sessionScore + points);
+  categoryResults.push({ category: q.category, correct: isCorrect });
+
+  const flash = $("#points-flash");
+  flash.textContent = isCorrect ? `+${points} POINTS` : "0 POINTS";
+  flash.className = `points-flash ${isCorrect ? "good" : "bad"}`;
+  flash.classList.remove("hidden");
+  $("#live-score-num").textContent = sessionScore;
+
+  // Record submission (best-effort; ignore duplicate-question errors on retry)
+  try {
+    await sb.from("submissions").insert({
+      profile_id: profile.id,
+      daily_challenge_id: todayChallenge.id,
+      question_id: q.id,
+      selected_answer: selected || "(no answer)",
+      is_correct: isCorrect,
+      time_taken_ms: timeTakenMs,
+      points_earned: points,
+    });
+  } catch (e) { /* ignore */ }
+
+  setTimeout(() => {
+    currentQIndex++;
+    if (currentQIndex < questions.length) {
+      showQuestion();
+    } else {
+      finishBattle();
+    }
+  }, 1400);
+}
+
+async function finishBattle() {
+  const correctCount = categoryResults.filter((c) => c.correct).length;
+
+  await sb.from("daily_results").insert({
+    profile_id: profile.id,
+    daily_challenge_id: todayChallenge.id,
+    total_score: sessionScore,
+    completed_at: new Date().toISOString(),
+  });
+
+  // Streak logic
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  let newStreak;
+  if (profile.last_played_date === yesterday) newStreak = profile.current_streak + 1;
+  else if (profile.last_played_date === todayStr) newStreak = profile.current_streak;
+  else newStreak = 1;
+  const newBestStreak = Math.max(profile.best_streak, newStreak);
+  const newXp = profile.xp + 50 + (sessionScore === 500 ? 100 : 0);
+  const newLevel = Math.floor(newXp / 500) + 1;
+
+  const updates = {
+    current_streak: newStreak,
+    best_streak: newBestStreak,
+    total_battles: profile.total_battles + 1,
+    total_correct: profile.total_correct + correctCount,
+    best_score: Math.max(profile.best_score, sessionScore),
+    last_played_date: todayStr,
+    xp: newXp,
+    level: newLevel,
+  };
+  await sb.from("profiles").update(updates).eq("id", profile.id);
+  Object.assign(profile, updates);
+
+  showResult(sessionScore, categoryResults);
+}
+
+function showResultFromExisting(result) {
+  showResult(result.total_score, null);
+}
+
+async function showResult(score, catResults) {
+  hideAllViews();
+  $("#result-view").classList.remove("hidden");
+  $("#result-score").textContent = `${score} / 500`;
+
+  const { data: rankRow } = await sb.from("leaderboard_today").select("rank").eq("daily_challenge_id", todayChallenge.id).eq("display_name", profile.display_name).maybeSingle();
+  $("#result-rank").textContent = rankRow ? `Global Rank #${rankRow.rank} · 🔥 ${profile.current_streak} Day Streak` : `🔥 ${profile.current_streak} Day Streak`;
+
+  const catsWrap = $("#result-cats");
+  catsWrap.innerHTML = "";
+  if (catResults) {
+    catResults.forEach((c) => {
+      const chip = document.createElement("span");
+      chip.className = `result-cat-chip ${c.correct ? "ok" : "no"}`;
+      chip.textContent = `${CATEGORY_ICONS[c.category] || ""} ${c.correct ? "✓" : "✗"}`;
+      catsWrap.appendChild(chip);
+    });
+  }
+
+  $("#result-share-btn").onclick = () => {
+    const text = `🧠 DAILY BRAIN BATTLE\nDay ${todayChallenge.day_number}\nScore: ${score}/500\n🔥 ${profile.current_streak} day streak\n\nCan you beat my score?\n${window.location.origin}`;
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text);
+      toast("Result copied to clipboard!");
+    }
+  };
 }
 
 // ---- Leaderboard ----
-async function loadLeaderboard() {
-  const { data, error } = await sb.from("leaderboard").select("*").limit(10);
+async function renderLeaderboard(selector, limit, showSticky) {
+  if (!todayChallenge) return;
+  const { data, error } = await sb.from("leaderboard_today").select("*").eq("daily_challenge_id", todayChallenge.id).order("rank").limit(limit);
   if (error) { console.error(error); return; }
-  const list = $("#leaderboard-list");
+  const list = $(selector);
   list.innerHTML = "";
-  data.forEach((row, i) => {
+  data.forEach((row) => {
+    const isYou = row.display_name === profile.display_name;
     const div = document.createElement("div");
-    div.className = "lb-row";
+    div.className = `lb-row ${isYou ? "you" : ""}`;
+    const rankClass = row.rank === 1 ? "top1" : row.rank === 2 ? "top2" : row.rank === 3 ? "top3" : "";
+    const medal = row.rank === 1 ? "🥇" : row.rank === 2 ? "🥈" : row.rank === 3 ? "🥉" : row.rank;
     div.innerHTML = `
       <span class="lb-left">
-        <span class="lb-rank">${i + 1}</span>
-        ${smallAvatarHtml(row.display_name, row.avatar_url)}
-        <span>${row.display_name}</span>
+        <span class="lb-rank ${rankClass}">${medal}</span>
+        ${avatarHtml(row.display_name, row.avatar_url)}
+        <span>${row.display_name}${isYou ? " (you)" : ""}</span>
       </span>
-      <span class="lb-streak">🔥 ${row.current_streak} <span style="color:var(--text-dim); font-weight:400;">(best ${row.best_streak})</span></span>`;
+      <span class="lb-score">${row.total_score}</span>`;
     list.appendChild(div);
   });
+
+  if (showSticky) {
+    const { data: mine } = await sb.from("leaderboard_today").select("*").eq("daily_challenge_id", todayChallenge.id).eq("display_name", profile.display_name).maybeSingle();
+    if (mine) {
+      $("#sticky-you").classList.remove("hidden");
+      $("#sticky-rank").textContent = mine.rank;
+      $("#sticky-score").textContent = `${mine.total_score} PTS`;
+    } else {
+      $("#sticky-you").classList.add("hidden");
+    }
+  }
 }
 
-// ---- Init: wire up auth state ----
-sb.auth.onAuthStateChange((_event, newSession) => {
-  session = newSession;
-});
+async function showLeaderboard() {
+  hideAllViews();
+  $("#leaderboard-view").classList.remove("hidden");
+  $("#lb-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
+  await renderLeaderboard("#leaderboard-list", 50, true);
+}
+
+// ---- Profile ----
+function showProfile() {
+  hideAllViews();
+  $("#profile-view").classList.remove("hidden");
+  $("#profile-avatar").innerHTML = profile.avatar_url
+    ? `<img src="${profile.avatar_url}" referrerpolicy="no-referrer" />`
+    : initialsFor(profile.display_name);
+  if (!profile.avatar_url) $("#profile-avatar").style.background = colorFor(profile.display_name);
+  $("#profile-name").textContent = profile.display_name;
+  $("#profile-level").textContent = `Level ${profile.level} · ${profile.xp} XP`;
+  $("#p-streak").textContent = profile.current_streak;
+  $("#p-best-streak").textContent = profile.best_streak;
+  $("#p-battles").textContent = profile.total_battles;
+  $("#p-best-score").textContent = profile.best_score;
+  $("#p-correct").textContent = profile.total_correct;
+  $("#p-xp").textContent = profile.xp;
+}
+
+// ---- Init ----
+sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
 
 (async function init() {
+  startResetCountdown();
   const { data } = await sb.auth.getSession();
   session = data.session;
   if (session) {
     await ensureProfile();
+  } else {
+    $("#auth-card").classList.remove("hidden");
   }
-  // else: auth-card (shown by default) stays visible until they sign in
 })();
