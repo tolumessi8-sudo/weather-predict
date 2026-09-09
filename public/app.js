@@ -23,6 +23,16 @@ let qTimerInterval = null;
 
 const CATEGORY_ICONS = { logic: "🧩", speed: "⚡", memory: "🧠", visual: "👁️", pattern: "🔷" };
 
+const LEVEL_TITLES = [
+  [1, "Beginner"], [3, "Learner"], [6, "Thinker"], [10, "Strategist"],
+  [15, "Analyst"], [20, "Tactician"], [25, "Mastermind"], [35, "Prodigy"], [50, "Grandmaster"],
+];
+function levelTitle(level) {
+  let title = LEVEL_TITLES[0][1];
+  for (const [minLevel, t] of LEVEL_TITLES) if (level >= minLevel) title = t;
+  return title;
+}
+
 function initialsFor(name) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -320,7 +330,31 @@ async function finishBattle() {
   await sb.from("profiles").update(updates).eq("id", profile.id);
   Object.assign(profile, updates);
 
+  await checkAndAwardAchievements(sessionScore, categoryResults);
   showResult(sessionScore, categoryResults);
+}
+
+// ---- Achievements ----
+async function awardAchievement(key) {
+  const { error } = await sb.from("player_achievements").insert({ profile_id: profile.id, achievement_key: key });
+  if (!error) toast(`🏅 Achievement unlocked!`);
+}
+
+async function checkAndAwardAchievements(score, catResults) {
+  const { data: earned } = await sb.from("player_achievements").select("achievement_key").eq("profile_id", profile.id);
+  const have = new Set((earned || []).map((e) => e.achievement_key));
+
+  if (!have.has("first_victory")) await awardAchievement("first_victory");
+  if (profile.current_streak >= 7 && !have.has("streak_7")) await awardAchievement("streak_7");
+  if (profile.current_streak >= 14 && !have.has("streak_14")) await awardAchievement("streak_14");
+  if (profile.current_streak >= 30 && !have.has("streak_30")) await awardAchievement("streak_30");
+  if (profile.current_streak >= 100 && !have.has("streak_100")) await awardAchievement("streak_100");
+  if (profile.total_battles >= 100 && !have.has("battles_100")) await awardAchievement("battles_100");
+  if (score === 500 && !have.has("perfect_score")) await awardAchievement("perfect_score");
+  if (catResults && catResults.every((c) => c.correct) && !have.has("accuracy_master")) await awardAchievement("accuracy_master");
+
+  const { data: rankRow } = await sb.from("leaderboard_today").select("rank").eq("daily_challenge_id", todayChallenge.id).eq("display_name", profile.display_name).maybeSingle();
+  if (rankRow && rankRow.rank <= 100 && !have.has("top_100")) await awardAchievement("top_100");
 }
 
 function showResultFromExisting(result) {
@@ -408,14 +442,74 @@ function showProfile() {
     : initialsFor(profile.display_name);
   if (!profile.avatar_url) $("#profile-avatar").style.background = colorFor(profile.display_name);
   $("#profile-name").textContent = profile.display_name;
-  $("#profile-level").textContent = `Level ${profile.level} · ${profile.xp} XP`;
+  $("#profile-level").textContent = `Level ${profile.level} · ${levelTitle(profile.level)} · ${profile.xp} XP`;
   $("#p-streak").textContent = profile.current_streak;
   $("#p-best-streak").textContent = profile.best_streak;
   $("#p-battles").textContent = profile.total_battles;
   $("#p-best-score").textContent = profile.best_score;
   $("#p-correct").textContent = profile.total_correct;
   $("#p-xp").textContent = profile.xp;
+  loadAchievements();
+  loadFriends();
 }
+
+async function loadAchievements() {
+  const { data: all } = await sb.from("achievements").select("*");
+  const { data: earned } = await sb.from("player_achievements").select("achievement_key").eq("profile_id", profile.id);
+  const earnedKeys = new Set((earned || []).map((e) => e.achievement_key));
+  const wrap = $("#achievements-list");
+  wrap.innerHTML = "";
+  (all || []).forEach((a) => {
+    const got = earnedKeys.has(a.key);
+    const chip = document.createElement("div");
+    chip.style.cssText = `display:flex; align-items:center; gap:10px; padding:10px; border-radius:12px; margin-bottom:8px; background:${got ? "rgba(255,201,77,0.1)" : "var(--surface-2)"}; opacity:${got ? "1" : "0.45"};`;
+    chip.innerHTML = `<span style="font-size:1.4rem;">${a.icon}</span><div><div style="font-weight:700; font-size:0.88rem;">${a.name}</div><div style="font-size:0.72rem; color:var(--text-dim);">${a.description}</div></div>`;
+    wrap.appendChild(chip);
+  });
+}
+
+async function loadFriends() {
+  const { data: friendRows } = await sb.from("friendships").select("friend_id").eq("profile_id", profile.id);
+  const ids = (friendRows || []).map((f) => f.friend_id);
+  const wrap = $("#friends-list");
+  wrap.innerHTML = "";
+  if (ids.length === 0) {
+    wrap.innerHTML = `<div class="subtext" style="margin:0;">No friends added yet — search above to add some.</div>`;
+    return;
+  }
+  const { data: friends } = await sb.from("profiles").select("id, display_name, avatar_url, current_streak, best_score").in("id", ids);
+  (friends || []).forEach((f) => {
+    const div = document.createElement("div");
+    div.className = "lb-row";
+    div.innerHTML = `<span class="lb-left">${avatarHtml(f.display_name, f.avatar_url)}<span>${f.display_name}</span></span><span class="lb-score">🔥 ${f.current_streak} · best ${f.best_score}</span>`;
+    wrap.appendChild(div);
+  });
+}
+
+$("#friend-search-btn").addEventListener("click", async () => {
+  const q = $("#friend-search-input").value.trim();
+  if (!q) return;
+  const { data: results } = await sb.from("profiles").select("id, display_name, avatar_url").ilike("display_name", `%${q}%`).neq("id", profile.id).limit(8);
+  const wrap = $("#friend-search-results");
+  wrap.innerHTML = "";
+  (results || []).forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "lb-row";
+    div.innerHTML = `<span class="lb-left">${avatarHtml(r.display_name, r.avatar_url)}<span>${r.display_name}</span></span>`;
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn btn-ghost";
+    addBtn.style.padding = "6px 12px";
+    addBtn.style.fontSize = "0.75rem";
+    addBtn.textContent = "+ Add";
+    addBtn.addEventListener("click", async () => {
+      const { error } = await sb.from("friendships").insert({ profile_id: profile.id, friend_id: r.id });
+      if (!error) { toast(`Added ${r.display_name}`); loadFriends(); }
+    });
+    div.appendChild(addBtn);
+    wrap.appendChild(div);
+  });
+  if ((results || []).length === 0) wrap.innerHTML = `<div class="subtext" style="margin:0;">No players found.</div>`;
+});
 
 // ---- Init ----
 sb.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
