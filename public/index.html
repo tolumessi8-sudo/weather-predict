@@ -53,11 +53,12 @@
   .logo{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:1.1rem; }
   .back-btn{
     background:var(--surface-2); border:1px solid var(--line);
-    width:32px; height:32px; border-radius:9px;
+    width:42px; height:42px; border-radius:12px;
     display:flex; align-items:center; justify-content:center;
-    font-size:1.1rem; color:var(--text); margin-right:2px;
+    font-size:1.4rem; color:var(--text); margin-right:4px;
+    transition:transform .15s ease, background .15s ease;
   }
-  .back-btn:active{ transform:scale(0.92); }
+  .back-btn:active{ transform:scale(0.88); background:var(--primary); }
   .logo .mark{
     width:32px; height:32px; border-radius:9px;
     background:linear-gradient(135deg, var(--primary), var(--primary-2));
@@ -258,6 +259,38 @@
   .toast.show{ opacity:1; }
 
   .footer-note{ text-align:center; color:var(--text-dim); font-size:0.68rem; margin-top:30px; padding:0 20px; line-height:1.7; }
+
+  /* ---- Transitions & polish ---- */
+  @keyframes viewIn{
+    0%{ opacity:0; transform:translateY(14px) scale(0.98); }
+    100%{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  .view-anim{ animation:viewIn 0.4s cubic-bezier(.22,1,.36,1); }
+
+  .card, .ticket{ transition:transform .2s ease, box-shadow .2s ease; }
+
+  button, .option-btn, .play-btn, .btn{ transition:transform .15s ease, filter .15s ease, background .2s ease, box-shadow .2s ease; }
+
+  @keyframes flamePulse{
+    0%, 100%{ transform:scale(1); }
+    50%{ transform:scale(1.15); }
+  }
+  .hero-stat .num{ display:inline-block; }
+  #hero-streak{ animation:flamePulse 1.8s ease-in-out infinite; display:inline-block; }
+
+  body{
+    background-size:200% 200%;
+    animation:gradientDrift 18s ease infinite;
+  }
+  @keyframes gradientDrift{
+    0%{ background-position:0% 0%; }
+    50%{ background-position:100% 100%; }
+    100%{ background-position:0% 0%; }
+  }
+
+  .lb-row{ transition:background .2s ease; }
+  .option-btn:hover{ filter:brightness(1.1); transform:translateY(-1px); }
+  .avatar-menu{ animation:viewIn 0.2s ease; }
 </style>
 </head>
 <body>

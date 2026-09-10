@@ -22,6 +22,13 @@ let questionStartTime = 0;
 let qTimerInterval = null;
 
 const CATEGORY_ICONS = { logic: "🧩", speed: "⚡", memory: "🧠", visual: "👁️", pattern: "🔷" };
+const CATEGORY_COLORS = {
+  logic: { bg: "rgba(124,92,255,0.18)", fg: "#A78BFA" },
+  speed: { bg: "rgba(255,201,77,0.18)", fg: "#FFC94D" },
+  memory: { bg: "rgba(79,209,255,0.18)", fg: "#4FD1FF" },
+  visual: { bg: "rgba(74,222,128,0.18)", fg: "#4ADE80" },
+  pattern: { bg: "rgba(251,113,133,0.18)", fg: "#FB7185" },
+};
 
 const LEVEL_TITLES = [
   [1, "Beginner"], [3, "Learner"], [6, "Thinker"], [10, "Strategist"],
@@ -159,6 +166,7 @@ async function showHome() {
   hideAllViews();
   setBackButton(false);
   $("#home-view").classList.remove("hidden");
+  $("#home-view").classList.remove("view-anim"); void $("#home-view").offsetWidth; $("#home-view").classList.add("view-anim");
   $("#hero-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
   $("#hero-streak").textContent = `🔥 ${profile.current_streak}`;
 
@@ -189,6 +197,7 @@ function startBattle() {
   hideAllViews();
   setBackButton(true);
   $("#battle-view").classList.remove("hidden");
+  $("#battle-view").classList.remove("view-anim"); void $("#battle-view").offsetWidth; $("#battle-view").classList.add("view-anim");
   $("#battle-countdown").classList.remove("hidden");
   $("#question-card").classList.add("hidden");
   currentQIndex = 0;
@@ -218,7 +227,11 @@ function startBattle() {
 function showQuestion() {
   const q = questions[currentQIndex];
   $("#q-num").textContent = currentQIndex + 1;
-  $("#q-category").textContent = `${CATEGORY_ICONS[q.category] || "🔹"} ${q.category.toUpperCase()}`;
+  const catColor = CATEGORY_COLORS[q.category] || { bg: "rgba(124,92,255,0.15)", fg: "var(--primary-2)" };
+  const catBadge = $("#q-category");
+  catBadge.textContent = `${CATEGORY_ICONS[q.category] || "🔹"} ${q.category.toUpperCase()}`;
+  catBadge.style.background = catColor.bg;
+  catBadge.style.color = catColor.fg;
   $("#q-prompt").textContent = q.prompt;
   $("#live-score-num").textContent = sessionScore;
   $("#points-flash").classList.add("hidden");
@@ -380,6 +393,7 @@ async function showResult(score, catResults) {
   hideAllViews();
   setBackButton(true);
   $("#result-view").classList.remove("hidden");
+  $("#result-view").classList.remove("view-anim"); void $("#result-view").offsetWidth; $("#result-view").classList.add("view-anim");
   $("#result-score").textContent = `${score} / 500`;
 
   const { data: rankRow } = await sb.from("leaderboard_today").select("rank").eq("daily_challenge_id", todayChallenge.id).eq("display_name", profile.display_name).maybeSingle();
@@ -391,6 +405,8 @@ async function showResult(score, catResults) {
     catResults.forEach((c) => {
       const chip = document.createElement("span");
       chip.className = `result-cat-chip ${c.correct ? "ok" : "no"}`;
+      const cc = CATEGORY_COLORS[c.category];
+      if (cc) chip.style.background = cc.bg;
       chip.textContent = `${CATEGORY_ICONS[c.category] || ""} ${c.correct ? "✓" : "✗"}`;
       catsWrap.appendChild(chip);
     });
@@ -446,6 +462,7 @@ async function showLeaderboard() {
   hideAllViews();
   setBackButton(true);
   $("#leaderboard-view").classList.remove("hidden");
+  $("#leaderboard-view").classList.remove("view-anim"); void $("#leaderboard-view").offsetWidth; $("#leaderboard-view").classList.add("view-anim");
   $("#lb-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
   await renderLeaderboard("#leaderboard-list", 50, true);
 }
@@ -455,6 +472,7 @@ function showProfile() {
   hideAllViews();
   setBackButton(true);
   $("#profile-view").classList.remove("hidden");
+  $("#profile-view").classList.remove("view-anim"); void $("#profile-view").offsetWidth; $("#profile-view").classList.add("view-anim");
   $("#profile-avatar").innerHTML = profile.avatar_url
     ? `<img src="${profile.avatar_url}" referrerpolicy="no-referrer" />`
     : initialsFor(profile.display_name);
