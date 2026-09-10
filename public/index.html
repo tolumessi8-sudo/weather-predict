@@ -129,6 +129,8 @@
     background:var(--bg-elevated); color:var(--text); font-size:1rem; font-family:inherit;
   }
   .row{ display:flex; gap:8px; }
+  .row input[type="text"]{ min-width:0; }
+  .row .btn{ flex-shrink:0; white-space:nowrap; }
   .btn{
     padding:13px 16px; border-radius:10px; font-weight:700; font-size:0.9rem;
   }
@@ -284,10 +286,8 @@
   <!-- NAME PICKER -->
   <div class="card hidden" id="namepicker-card">
     <div class="section-title">✏️ Pick your battle name</div>
-    <div class="row">
-      <input type="text" id="namepicker-input" placeholder="Your name" maxlength="20" />
-      <button class="btn btn-primary" id="namepicker-save">Continue</button>
-    </div>
+    <input type="text" id="namepicker-input" placeholder="Your name" maxlength="20" style="width:100%; margin-bottom:10px;" />
+    <button class="btn btn-primary" id="namepicker-save" style="width:100%;">Continue</button>
   </div>
 
   <!-- HOMEPAGE / HERO -->
