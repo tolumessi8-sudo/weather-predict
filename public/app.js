@@ -142,8 +142,22 @@ function hideAllViews() {
   ["home-view", "battle-view", "result-view", "leaderboard-view", "profile-view"].forEach((id) => $(`#${id}`).classList.add("hidden"));
 }
 
+function setBackButton(show) {
+  $("#nav-back-btn").classList.toggle("hidden", !show);
+  $("#nav-mark").classList.toggle("hidden", show);
+  $("#nav-title").classList.toggle("hidden", show);
+}
+$("#nav-back-btn").addEventListener("click", () => {
+  if (!$("#battle-view").classList.contains("hidden")) {
+    if (!confirm("Leave now? Your progress in this battle will be lost.")) return;
+    if (qTimerInterval) clearInterval(qTimerInterval);
+  }
+  showHome();
+});
+
 async function showHome() {
   hideAllViews();
+  setBackButton(false);
   $("#home-view").classList.remove("hidden");
   $("#hero-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
   $("#hero-streak").textContent = `🔥 ${profile.current_streak}`;
@@ -173,6 +187,7 @@ $("#play-btn").addEventListener("click", async () => {
 // ---- Battle flow ----
 function startBattle() {
   hideAllViews();
+  setBackButton(true);
   $("#battle-view").classList.remove("hidden");
   $("#battle-countdown").classList.remove("hidden");
   $("#question-card").classList.add("hidden");
@@ -363,6 +378,7 @@ function showResultFromExisting(result) {
 
 async function showResult(score, catResults) {
   hideAllViews();
+  setBackButton(true);
   $("#result-view").classList.remove("hidden");
   $("#result-score").textContent = `${score} / 500`;
 
@@ -428,6 +444,7 @@ async function renderLeaderboard(selector, limit, showSticky) {
 
 async function showLeaderboard() {
   hideAllViews();
+  setBackButton(true);
   $("#leaderboard-view").classList.remove("hidden");
   $("#lb-day-num").textContent = todayChallenge ? todayChallenge.day_number : "1";
   await renderLeaderboard("#leaderboard-list", 50, true);
@@ -436,6 +453,7 @@ async function showLeaderboard() {
 // ---- Profile ----
 function showProfile() {
   hideAllViews();
+  setBackButton(true);
   $("#profile-view").classList.remove("hidden");
   $("#profile-avatar").innerHTML = profile.avatar_url
     ? `<img src="${profile.avatar_url}" referrerpolicy="no-referrer" />`
